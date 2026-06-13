@@ -237,7 +237,7 @@ function ScanPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <img src="/blue-logo.png" alt="Logo" className="h-5 w-auto object-contain" />
-              <CardTitle>Welcome, {profile?.full_name ?? "Clerk"} 👋</CardTitle>
+              <CardTitle>Welcome, {profile?.full_name ?? "Clerk"}</CardTitle>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
