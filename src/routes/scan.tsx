@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, LogOut, MapPin, Save, Trash2, Download } from "lucide-react";
+import { BookOpen, LogOut, MapPin, Save, Trash2, Download, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -128,7 +128,12 @@ function ScanPage() {
   const handleDetected = async (code: string) => {
     setPaused(true);
     setForm((f) => ({ ...f, isbn: code }));
-    toast.message(`Scanned ${code}`, { description: "Looking up metadata…" });
+    await performLookup(code);
+  };
+
+  const performLookup = async (code: string) => {
+    if (!code) return;
+    toast.message(`Looking up ${code}…`);
     const meta = await lookupIsbn(code);
     if (meta) {
       setForm((f) => ({ ...f, ...meta }));
@@ -305,12 +310,29 @@ function ScanPage() {
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 space-y-1.5">
               <Label>ISBN</Label>
-              <Input
-                value={form.isbn}
-                onChange={(e) => setForm({ ...form, isbn: e.target.value })}
-                placeholder="13-digit barcode"
-                inputMode="numeric"
-              />
+              <div className="flex gap-2">
+                <Input
+                  value={form.isbn}
+                  onChange={(e) => setForm({ ...form, isbn: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      performLookup(form.isbn);
+                    }
+                  }}
+                  placeholder="13-digit barcode"
+                  inputMode="numeric"
+                />
+                <Button 
+                  variant="secondary"
+                  type="button"
+                  onClick={() => performLookup(form.isbn)}
+                  disabled={!form.isbn}
+                >
+                  <Search className="mr-1 h-4 w-4" />
+                  Lookup
+                </Button>
+              </div>
             </div>
             <div className="col-span-2 space-y-1.5">
               <Label>Title</Label>
