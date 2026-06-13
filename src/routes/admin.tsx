@@ -98,7 +98,7 @@ function AdminPage() {
     <div className="mx-auto max-w-6xl px-4 pb-12">
       <header className="flex items-center justify-between border-b py-4">
         <div className="flex items-center gap-2">
-          <BookOpen className="h-5 w-5 text-primary" />
+          <img src="/blue-logo.png" alt="Logo" className="h-5 w-auto object-contain" />
           <h1 className="text-lg font-semibold">Admin Panel</h1>
           <Badge variant="secondary" className="ml-2 capitalize">
             {role?.replace("_", " ")}

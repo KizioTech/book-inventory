@@ -211,7 +211,7 @@ function ScanPage() {
         <Card className="w-full max-w-md">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-primary" />
+              <img src="/blue-logo.png" alt="Logo" className="h-5 w-auto object-contain" />
               <CardTitle>Welcome, {profile?.full_name ?? "Clerk"} 👋</CardTitle>
             </div>
           </CardHeader>

@@ -74,15 +74,15 @@ function AuthPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-background to-secondary/40 px-4 py-12">
       <div className="w-full max-w-md">
-        <div className="mb-6 flex flex-col items-center justify-center gap-1">
-          <div className="flex items-center gap-2">
-            <BookOpen className="h-7 w-7 text-primary" />
+        <div className="mb-6 flex flex-col items-center justify-center gap-2">
+          <div className="flex flex-col items-center gap-3">
+            <img src="/blue-logo.png" alt="FutecAI Logo" className="h-16 object-contain" />
             <h1 className="text-2xl font-bold tracking-tight text-primary">
               Book Inventory
             </h1>
           </div>
           <p className="text-sm text-slate-500 font-medium">
-            Ministry of Education
+            FutecAI Limited Company
           </p>
         </div>
         <Card className="rounded-2xl shadow-sm border border-slate-200">

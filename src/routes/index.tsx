@@ -25,7 +25,7 @@ function Index() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-3 text-muted-foreground">
-        <BookOpen className="h-10 w-10 animate-pulse text-primary" />
+        <img src="/blue-logo.png" alt="FutecAI Logo" className="h-12 w-auto animate-pulse object-contain" />
         <p className="text-sm">Loading…</p>
       </div>
     </div>
