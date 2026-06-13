@@ -63,6 +63,7 @@ function ScanPage() {
   const [records, setRecords] = useState<BookRow[]>([]);
   const [paused, setPaused] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isLookingUp, setIsLookingUp] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
@@ -133,40 +134,64 @@ function ScanPage() {
 
   const performLookup = async (code: string) => {
     if (!code) return;
-    toast.message(`Looking up ${code}…`);
-    const meta = await lookupIsbn(code);
-    if (meta) {
-      setForm((f) => ({ ...f, ...meta }));
-      toast.success(meta.title || "Book details loaded");
-    } else {
-      toast.warning("No metadata found — fill in manually");
+    
+    setIsLookingUp(true);
+    const loadingToast = toast.loading(`Looking up ${code}...`);
+    
+    try {
+      const meta = await lookupIsbn(code);
+      
+      if (meta && (meta.title || meta.author)) {
+        setForm((f) => ({ 
+          ...f, 
+          ...meta,
+          // Preserve the original ISBN if lookup returned empty
+          isbn: meta.isbn || code 
+        }));
+        toast.success(meta.title || "Book details loaded", { id: loadingToast });
+      } else {
+        toast.warning("No metadata found — please fill in manually", { id: loadingToast });
+        // Still update the ISBN field even if no metadata found
+        setForm((f) => ({ ...f, isbn: code }));
+      }
+    } catch (error) {
+      console.error('Lookup error:', error);
+      toast.error("Failed to lookup ISBN", { id: loadingToast });
+      setForm((f) => ({ ...f, isbn: code }));
+    } finally {
+      setIsLookingUp(false);
     }
   };
 
   const save = async () => {
     if (!user || !schoolId) return;
-    if (!form.isbn && !form.title) {
+    
+    const trimmedIsbn = form.isbn?.trim();
+    if (!trimmedIsbn && !form.title?.trim()) {
       toast.error("Enter an ISBN or a title");
       return;
     }
+    
     setSaving(true);
     const { error } = await supabase.from("books").insert({
-      isbn: form.isbn || null,
-      title: form.title || null,
-      author: form.author || null,
-      publisher: form.publisher || null,
-      year: form.year || null,
+      isbn: trimmedIsbn || null,
+      title: form.title?.trim() || null,
+      author: form.author?.trim() || null,
+      publisher: form.publisher?.trim() || null,
+      year: form.year?.trim() || null,
       quantity: form.quantity,
       condition: form.condition,
-      notes: form.notes || null,
+      notes: form.notes?.trim() || null,
       school_id: schoolId,
       clerk_id: user.id,
     });
     setSaving(false);
+    
     if (error) {
       toast.error(error.message);
       return;
     }
+    
     toast.success("Saved");
     setForm({ ...empty });
     setPaused(false);
@@ -327,10 +352,10 @@ function ScanPage() {
                   variant="secondary"
                   type="button"
                   onClick={() => performLookup(form.isbn)}
-                  disabled={!form.isbn}
+                  disabled={!form.isbn || isLookingUp}
                 >
                   <Search className="mr-1 h-4 w-4" />
-                  Lookup
+                  {isLookingUp ? "Looking up..." : "Lookup"}
                 </Button>
               </div>
             </div>
