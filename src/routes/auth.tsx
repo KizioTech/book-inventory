@@ -1,28 +1,33 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
       { title: "Sign in — School Book Inventory" },
-      { name: "description", content: "Sign in to record school book inventories." },
+      {
+        name: "description",
+        content: "Sign in to record school book inventories.",
+      },
     ],
   }),
   component: AuthPage,
 });
 
 function AuthPage() {
-  const { user, loading, signIn, signUp } = useAuth();
+  const { user, loading, signIn } = useAuth();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && user) navigate({ to: "/" });
@@ -32,91 +37,117 @@ function AuthPage() {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     setBusy(true);
-    const { error } = await signIn(String(f.get("email")), String(f.get("password")));
-    setBusy(false);
-    if (error) toast.error(error);
-    else toast.success("Welcome back");
-  };
-
-  const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    setBusy(true);
-    const { error } = await signUp(
+    setErrorMsg(null);
+    const { error } = await signIn(
       String(f.get("email")),
       String(f.get("password")),
-      String(f.get("full_name")),
     );
     setBusy(false);
-    if (error) toast.error(error);
-    else toast.success("Account created — you can sign in now.");
+    if (error) {
+      setErrorMsg("Incorrect email or password. Please try again.");
+    } else {
+      toast.success("Welcome back");
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const emailInput = document.getElementById("si-email") as HTMLInputElement;
+    if (!emailInput || !emailInput.value) {
+      toast.error("Please enter your email address first.");
+      return;
+    }
+    setBusy(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(
+      emailInput.value,
+      {
+        redirectTo: window.location.origin + "/reset-password",
+      },
+    );
+    setBusy(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Password reset instructions sent to your email.");
+    }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background to-secondary/40 px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-background to-secondary/40 px-4 py-12">
       <div className="w-full max-w-md">
-        <div className="mb-6 flex items-center justify-center gap-2">
-          <BookOpen className="h-7 w-7 text-primary" />
-          <h1 className="text-xl font-semibold tracking-tight">Book Inventory</h1>
+        <div className="mb-6 flex flex-col items-center justify-center gap-1">
+          <div className="flex items-center gap-2">
+            <BookOpen className="h-7 w-7 text-primary" />
+            <h1 className="text-2xl font-bold tracking-tight text-primary">
+              Book Inventory
+            </h1>
+          </div>
+          <p className="text-sm text-slate-500 font-medium">
+            Ministry of Education
+          </p>
         </div>
-        <Card>
-          <CardHeader>
-            <CardTitle>Sign in</CardTitle>
-            <CardDescription>
-              For data-entry clerks and administrators.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="signin">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="signin">Sign in</TabsTrigger>
-                <TabsTrigger value="signup">Create account</TabsTrigger>
-              </TabsList>
-              <TabsContent value="signin">
-                <form onSubmit={handleSignIn} className="space-y-3 pt-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="si-email">Email</Label>
-                    <Input id="si-email" name="email" type="email" required autoComplete="email" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="si-pw">Password</Label>
-                    <Input
-                      id="si-pw"
-                      name="password"
-                      type="password"
-                      required
-                      autoComplete="current-password"
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={busy}>
-                    {busy ? "Signing in…" : "Sign in"}
-                  </Button>
-                </form>
-              </TabsContent>
-              <TabsContent value="signup">
-                <form onSubmit={handleSignUp} className="space-y-3 pt-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="su-name">Full name</Label>
-                    <Input id="su-name" name="full_name" required />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="su-email">Email</Label>
-                    <Input id="su-email" name="email" type="email" required />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="su-pw">Password</Label>
-                    <Input id="su-pw" name="password" type="password" required minLength={6} />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={busy}>
-                    {busy ? "Creating account…" : "Create account"}
-                  </Button>
-                  <p className="text-xs text-muted-foreground">
-                    The first account becomes the Super Admin. Subsequent accounts default to Clerk
-                    and need a school assigned by an admin.
-                  </p>
-                </form>
-              </TabsContent>
-            </Tabs>
+        <Card className="rounded-2xl shadow-sm border border-slate-200">
+          <CardContent className="pt-6">
+            <form onSubmit={handleSignIn} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="si-email">Email address</Label>
+                <Input
+                  id="si-email"
+                  name="email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  className="rounded-xl px-4 py-3 h-auto"
+                />
+              </div>
+              <div className="space-y-1.5 relative">
+                <Label htmlFor="si-pw">Password</Label>
+                <div className="relative">
+                  <Input
+                    id="si-pw"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    required
+                    autoComplete="current-password"
+                    className="rounded-xl px-4 py-3 h-auto pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full rounded-xl py-6 bg-blue-600 hover:bg-blue-700 text-white"
+                disabled={busy}
+              >
+                {busy ? "Signing in…" : "Sign In"}
+              </Button>
+
+              {errorMsg && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm text-center">
+                  {errorMsg}
+                </div>
+              )}
+
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className="text-sm text-slate-500 hover:text-slate-700 font-medium"
+                >
+                  Forgot your password?
+                </button>
+              </div>
+            </form>
           </CardContent>
         </Card>
       </div>

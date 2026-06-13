@@ -1,6 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, LogOut, Plus, Trash2, Download, ScanLine } from "lucide-react";
+import {
+  BookOpen,
+  LogOut,
+  Plus,
+  Trash2,
+  Download,
+  ScanLine,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,7 +82,8 @@ function AdminPage() {
   useEffect(() => {
     if (loading) return;
     if (!user) navigate({ to: "/auth" });
-    else if (role !== "super_admin" && role !== "admin") navigate({ to: "/scan" });
+    else if (role !== "super_admin" && role !== "admin")
+      navigate({ to: "/scan" });
   }, [user, role, loading, navigate]);
 
   if (loading || !user || (role !== "super_admin" && role !== "admin")) {
@@ -100,7 +108,11 @@ function AdminPage() {
           <span className="hidden text-sm text-muted-foreground sm:inline">
             {profile?.full_name}
           </span>
-          <Button variant="outline" size="sm" onClick={() => navigate({ to: "/scan" })}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate({ to: "/scan" })}
+          >
             <ScanLine className="mr-1 h-4 w-4" />
             Scan
           </Button>
@@ -139,6 +151,8 @@ function AdminPage() {
 function SchoolsTab() {
   const [schools, setSchools] = useState<School[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [lastEntries, setLastEntries] = useState<Record<string, string>>({});
+  const [clerkCounts, setClerkCounts] = useState<Record<string, number>>({});
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<School | null>(null);
 
@@ -148,12 +162,31 @@ function SchoolsTab() {
       .select("*")
       .order("created_at", { ascending: false });
     setSchools((data as School[]) ?? []);
-    const { data: books } = await supabase.from("books").select("school_id");
+    const { data: books } = await supabase
+      .from("books")
+      .select("school_id, created_at");
     const c: Record<string, number> = {};
-    (books ?? []).forEach((b: { school_id: string }) => {
+    const latest: Record<string, string> = {};
+    (books ?? []).forEach((b: { school_id: string; created_at: string }) => {
       c[b.school_id] = (c[b.school_id] ?? 0) + 1;
+      if (
+        !latest[b.school_id] ||
+        new Date(b.created_at) > new Date(latest[b.school_id])
+      ) {
+        latest[b.school_id] = b.created_at;
+      }
     });
     setCounts(c);
+    setLastEntries(latest);
+
+    const { data: clerkSchools } = await supabase
+      .from("clerk_schools")
+      .select("school_id");
+    const cc: Record<string, number> = {};
+    (clerkSchools ?? []).forEach((cs: { school_id: string }) => {
+      cc[cs.school_id] = (cc[cs.school_id] ?? 0) + 1;
+    });
+    setClerkCounts(cc);
   };
   useEffect(() => {
     load();
@@ -170,7 +203,10 @@ function SchoolsTab() {
       notes: String(f.get("notes") || "") || null,
     };
     if (editing) {
-      const { error } = await supabase.from("schools").update(payload).eq("id", editing.id);
+      const { error } = await supabase
+        .from("schools")
+        .update(payload)
+        .eq("id", editing.id);
       if (error) return toast.error(error.message);
       toast.success("Updated");
     } else {
@@ -186,6 +222,57 @@ function SchoolsTab() {
   const toggleActive = async (s: School) => {
     await supabase.from("schools").update({ active: !s.active }).eq("id", s.id);
     load();
+  };
+
+  const getStatus = (s: School) => {
+    if (!s.active)
+      return {
+        label: "Paused",
+        variant: "outline",
+        className: "bg-slate-100 text-slate-600",
+        icon: "⏸",
+      };
+    const last = lastEntries[s.id];
+    if (!last)
+      return {
+        label: "Not started",
+        variant: "outline",
+        className: "bg-red-50 text-red-600 border-red-200",
+        icon: "🔴",
+      };
+
+    const diffMins = (Date.now() - new Date(last).getTime()) / (1000 * 60);
+    if (diffMins < 30)
+      return {
+        label: "Active",
+        variant: "default",
+        className: "bg-green-600 hover:bg-green-700 text-white",
+        icon: "🟢",
+      };
+    if (diffMins < 180)
+      return {
+        label: "Slow",
+        variant: "outline",
+        className: "bg-amber-50 text-amber-600 border-amber-200",
+        icon: "🟡",
+      };
+    return {
+      label: "Inactive",
+      variant: "outline",
+      className: "bg-slate-50 text-slate-500",
+      icon: "⚪",
+    };
+  };
+
+  const formatTimeAgo = (isoDate: string) => {
+    const diffMins = Math.round(
+      (Date.now() - new Date(isoDate).getTime()) / 60000,
+    );
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins} mins ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours} hr${diffHours > 1 ? "s" : ""} ago`;
+    return `${Math.floor(diffHours / 24)} days ago`;
   };
 
   return (
@@ -207,17 +294,26 @@ function SchoolsTab() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editing ? "Edit school" : "New school"}</DialogTitle>
+              <DialogTitle>
+                {editing ? "Edit school" : "New school"}
+              </DialogTitle>
             </DialogHeader>
             <form onSubmit={save} className="space-y-3">
               <div className="space-y-1.5">
                 <Label>Name</Label>
-                <Input name="name" required defaultValue={editing?.name ?? ""} />
+                <Input
+                  name="name"
+                  required
+                  defaultValue={editing?.name ?? ""}
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>District</Label>
-                  <Input name="district" defaultValue={editing?.district ?? ""} />
+                  <Input
+                    name="district"
+                    defaultValue={editing?.district ?? ""}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Region</Label>
@@ -245,42 +341,64 @@ function SchoolsTab() {
             <thead className="text-left text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-4 py-2">Name</th>
-                <th className="px-4 py-2">District</th>
-                <th className="px-4 py-2">Books</th>
+                <th className="px-4 py-2">Stats</th>
                 <th className="px-4 py-2">Status</th>
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>
             <tbody>
-              {schools.map((s) => (
-                <tr key={s.id} className="border-t">
-                  <td className="px-4 py-2 font-medium">{s.name}</td>
-                  <td className="px-4 py-2 text-muted-foreground">{s.district ?? "—"}</td>
-                  <td className="px-4 py-2">{counts[s.id] ?? 0}</td>
-                  <td className="px-4 py-2">
-                    {s.active ? (
-                      <Badge>Active</Badge>
-                    ) : (
-                      <Badge variant="outline">Inactive</Badge>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setEditing(s);
-                        setOpen(true);
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => toggleActive(s)}>
-                      {s.active ? "Deactivate" : "Activate"}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {schools.map((s) => {
+                const status = getStatus(s);
+                return (
+                  <tr key={s.id} className="border-t">
+                    <td className="px-4 py-2">
+                      <div className="font-medium text-base">🏫 {s.name}</div>
+                      <div className="text-muted-foreground text-xs">
+                        {s.district ?? "—"}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2 text-sm text-slate-600">
+                      <div>
+                        {counts[s.id]?.toLocaleString() ?? 0} books ·{" "}
+                        {clerkCounts[s.id] ?? 0} clerks
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {lastEntries[s.id]
+                          ? `Last entry: ${formatTimeAgo(lastEntries[s.id])}`
+                          : "No entries yet"}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2">
+                      <Badge
+                        variant={status.variant as any}
+                        className={status.className}
+                      >
+                        <span className="mr-1">{status.icon}</span>{" "}
+                        {status.label}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditing(s);
+                          setOpen(true);
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleActive(s)}
+                      >
+                        {s.active ? "Pause" : "Unpause"}
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
               {schools.length === 0 && (
                 <tr>
                   <td className="px-4 py-6 text-muted-foreground" colSpan={5}>
@@ -306,17 +424,20 @@ function UsersTab() {
   const [assignments, setAssignments] = useState<Record<string, string[]>>({});
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<Profile | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   const load = async () => {
-    const [{ data: ps }, { data: rs }, { data: sc }, { data: cs }] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("id, full_name, email, active")
-        .order("created_at", { ascending: false }),
-      supabase.from("user_roles").select("user_id, role"),
-      supabase.from("schools").select("*").order("name"),
-      supabase.from("clerk_schools").select("clerk_id, school_id"),
-    ]);
+    const [{ data: ps }, { data: rs }, { data: sc }, { data: cs }] =
+      await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, full_name, email, active")
+          .order("created_at", { ascending: false }),
+        supabase.from("user_roles").select("user_id, role"),
+        supabase.from("schools").select("*").order("name"),
+        supabase.from("clerk_schools").select("clerk_id, school_id"),
+      ]);
     setUsers((ps as Profile[]) ?? []);
     const rmap: Record<string, string[]> = {};
     ((rs as RoleRow[]) ?? []).forEach((r) => {
@@ -355,11 +476,16 @@ function UsersTab() {
     }
   };
 
-  const saveTarget = async (newRole: "clerk" | "admin" | "super_admin", selected: string[]) => {
+  const saveTarget = async (
+    newRole: "clerk" | "admin" | "super_admin",
+    selected: string[],
+  ) => {
     if (!target) return;
     if (myRole === "super_admin") {
       await supabase.from("user_roles").delete().eq("user_id", target.id);
-      await supabase.from("user_roles").insert({ user_id: target.id, role: newRole });
+      await supabase
+        .from("user_roles")
+        .insert({ user_id: target.id, role: newRole });
     }
     await setAssignmentsFor(target.id, selected);
     toast.success("User updated");
@@ -368,18 +494,63 @@ function UsersTab() {
   };
 
   const toggleActive = async (u: Profile) => {
-    await supabase.from("profiles").update({ active: !u.active }).eq("id", u.id);
+    await supabase
+      .from("profiles")
+      .update({ active: !u.active })
+      .eq("id", u.id);
+    load();
+  };
+
+  const handleCreateUser = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const email = String(f.get("email"));
+    const password = String(f.get("password"));
+    const full_name = String(f.get("full_name"));
+    const role = String(f.get("role"));
+
+    // get selected schools
+    const schoolNodes = document.querySelectorAll(
+      'input[name="schools"]:checked',
+    );
+    const school_ids = Array.from(schoolNodes).map(
+      (n) => (n as HTMLInputElement).value,
+    );
+
+    setCreating(true);
+    const { data, error } = await supabase.functions.invoke("create-user", {
+      body: { email, password, full_name, role, school_ids },
+    });
+    setCreating(false);
+
+    if (error) {
+      toast.error(error.message || "Failed to create user");
+      return;
+    }
+
+    if (data?.error) {
+      toast.error(data.error);
+      return;
+    }
+
+    toast.success("User created successfully");
+    setCreateOpen(false);
     load();
   };
 
   return (
     <Card className="mt-4">
-      <CardHeader>
-        <CardTitle>Users</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          New users sign themselves up on the login page; come here to set their role and assign
-          schools.
-        </p>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>Users</CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            Manage clerks and administrators across schools.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Plus className="mr-1 h-4 w-4" />
+          Add User
+        </Button>
       </CardHeader>
       <CardContent className="px-0">
         <div className="overflow-x-auto">
@@ -397,7 +568,9 @@ function UsersTab() {
             <tbody>
               {users.map((u) => (
                 <tr key={u.id} className="border-t">
-                  <td className="px-4 py-2 font-medium">{u.full_name ?? "—"}</td>
+                  <td className="px-4 py-2 font-medium">
+                    {u.full_name ?? "—"}
+                  </td>
                   <td className="px-4 py-2 text-muted-foreground">{u.email}</td>
                   <td className="px-4 py-2">{rankFor(u.id)}</td>
                   <td className="px-4 py-2 text-xs text-muted-foreground">
@@ -407,13 +580,25 @@ function UsersTab() {
                       .join(", ") || "—"}
                   </td>
                   <td className="px-4 py-2">
-                    {u.active ? <Badge>Active</Badge> : <Badge variant="outline">Inactive</Badge>}
+                    {u.active ? (
+                      <Badge>Active</Badge>
+                    ) : (
+                      <Badge variant="outline">Inactive</Badge>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-right">
-                    <Button variant="ghost" size="sm" onClick={() => openAssign(u)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openAssign(u)}
+                    >
                       Manage
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => toggleActive(u)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleActive(u)}
+                    >
                       {u.active ? "Deactivate" : "Activate"}
                     </Button>
                   </td>
@@ -433,7 +618,8 @@ function UsersTab() {
             <ManageUserForm
               target={target}
               currentRole={
-                (roles[target.id]?.[0] as "clerk" | "admin" | "super_admin") ?? "clerk"
+                (roles[target.id]?.[0] as "clerk" | "admin" | "super_admin") ??
+                "clerk"
               }
               currentSchools={assignments[target.id] ?? []}
               schools={schools}
@@ -441,6 +627,68 @@ function UsersTab() {
               onSave={saveTarget}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create new user</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateUser} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Full Name</Label>
+              <Input name="full_name" required />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input name="email" type="email" required />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Temporary Password</Label>
+              <Input name="password" required minLength={6} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select name="role" defaultValue="clerk">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="clerk">Clerk</SelectItem>
+                  {myRole === "super_admin" && (
+                    <SelectItem value="admin">Admin</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Assign schools (if clerk)</Label>
+              <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-md border p-3">
+                {schools.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No schools available.
+                  </p>
+                )}
+                {schools.map((s) => (
+                  <label key={s.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="schools"
+                      value={s.id}
+                      className="rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <span>{s.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={creating}>
+                {creating ? "Creating..." : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </Card>
@@ -494,7 +742,11 @@ function ManageUserForm({
                 <Checkbox
                   checked={checked}
                   onCheckedChange={(v) =>
-                    setSelected(v ? [...selected, s.id] : selected.filter((x) => x !== s.id))
+                    setSelected(
+                      v
+                        ? [...selected, s.id]
+                        : selected.filter((x) => x !== s.id),
+                    )
                   }
                 />
                 <span>{s.name}</span>
@@ -552,19 +804,39 @@ function RecordsTab() {
     const totalBooks = books.reduce((n, b) => n + (b.quantity ?? 1), 0);
     const activeSchools = new Set(books.map((b) => b.school_id)).size;
     const activeClerks = new Set(books.map((b) => b.clerk_id)).size;
-    return { totalBooks, activeSchools, activeClerks };
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayBooks = books
+      .filter((b) => new Date(b.created_at) >= today)
+      .reduce((n, b) => n + (b.quantity ?? 1), 0);
+
+    return { totalBooks, activeSchools, activeClerks, todayBooks };
   }, [books]);
 
-  const schoolName = (id: string) => schools.find((s) => s.id === id)?.name ?? "—";
+  const schoolName = (id: string) =>
+    schools.find((s) => s.id === id)?.name ?? "—";
   const clerkName = (id: string) =>
-    profiles.find((p) => p.id === id)?.full_name ?? profiles.find((p) => p.id === id)?.email ?? "—";
+    profiles.find((p) => p.id === id)?.full_name ??
+    profiles.find((p) => p.id === id)?.email ??
+    "—";
 
   return (
     <div className="mt-4 space-y-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <SummaryCard label="Books recorded" value={totals.totalBooks.toLocaleString()} />
-        <SummaryCard label="Schools with records" value={String(totals.activeSchools)} />
-        <SummaryCard label="Active clerks" value={String(totals.activeClerks)} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <SummaryCard
+          label="Total Books"
+          value={totals.totalBooks.toLocaleString()}
+        />
+        <SummaryCard
+          label="Schools"
+          value={`Active: ${totals.activeSchools}`}
+        />
+        <SummaryCard label="Clerks" value={`Active: ${totals.activeClerks}`} />
+        <SummaryCard
+          label="Today"
+          value={`${totals.todayBooks.toLocaleString()} books`}
+        />
       </div>
 
       <Card>
@@ -630,9 +902,13 @@ function RecordsTab() {
                   <tr key={b.id} className="border-t">
                     <td className="px-4 py-2">
                       <div className="font-medium">{b.title ?? "—"}</div>
-                      <div className="text-xs text-muted-foreground">{b.author ?? ""}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {b.author ?? ""}
+                      </div>
                     </td>
-                    <td className="px-4 py-2 font-mono text-xs">{b.isbn ?? "—"}</td>
+                    <td className="px-4 py-2 font-mono text-xs">
+                      {b.isbn ?? "—"}
+                    </td>
                     <td className="px-4 py-2">{schoolName(b.school_id)}</td>
                     <td className="px-4 py-2">{clerkName(b.clerk_id)}</td>
                     <td className="px-4 py-2">{b.quantity}</td>
@@ -715,8 +991,11 @@ function ExportTab() {
       quantity: b.quantity,
       condition: b.condition,
       notes: b.notes,
-      school_name: (b.schools as unknown as { name: string } | null)?.name ?? "",
-      clerk_name: (b.profiles as unknown as { full_name: string } | null)?.full_name ?? "",
+      school_name:
+        (b.schools as unknown as { name: string } | null)?.name ?? "",
+      clerk_name:
+        (b.profiles as unknown as { full_name: string } | null)?.full_name ??
+        "",
       recorded_at: b.created_at,
     }));
     if (rows.length === 0) return toast.error("Nothing to export");

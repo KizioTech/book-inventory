@@ -79,7 +79,14 @@ function ScanPage() {
           .eq("clerk_id", user.id);
         const list =
           (data ?? [])
-            .map((r) => r.schools as unknown as { id: string; name: string; active: boolean })
+            .map(
+              (r) =>
+                r.schools as unknown as {
+                  id: string;
+                  name: string;
+                  active: boolean;
+                },
+            )
             .filter((s) => s && s.active) ?? [];
         setSchools(list.map((s) => ({ id: s.id, name: s.name })));
       } else {
@@ -102,7 +109,9 @@ function ScanPage() {
     if (!user) return;
     const { data } = await supabase
       .from("books")
-      .select("id, isbn, title, author, publisher, year, quantity, condition, notes, created_at")
+      .select(
+        "id, isbn, title, author, publisher, year, quantity, condition, notes, created_at",
+      )
       .eq("school_id", sid)
       .eq("clerk_id", user.id)
       .order("created_at", { ascending: false })
@@ -160,8 +169,10 @@ function ScanPage() {
   };
 
   const del = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this book?")) return;
     await supabase.from("books").delete().eq("id", id);
     loadRecords(schoolId);
+    toast.success("Book deleted");
   };
 
   const exportCsv = () => {
@@ -179,7 +190,10 @@ function ScanPage() {
         recorded_at: r.created_at,
       })),
     );
-    downloadCsv(`${activeSchool?.name ?? "books"}-${Date.now()}.csv`.replace(/\s+/g, "_"), csv);
+    downloadCsv(
+      `${activeSchool?.name ?? "books"}-${Date.now()}.csv`.replace(/\s+/g, "_"),
+      csv,
+    );
   };
 
   if (loading || !user) {
@@ -193,7 +207,7 @@ function ScanPage() {
   // School select screen
   if (!locked) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background to-secondary/40 px-4 py-10">
+      <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-background to-secondary/40 px-4 py-10">
         <Card className="w-full max-w-md">
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -223,12 +237,20 @@ function ScanPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={startSession} className="w-full" disabled={!schoolId}>
+            <Button
+              onClick={startSession}
+              className="w-full"
+              disabled={!schoolId}
+            >
               Start Recording
             </Button>
             <div className="flex justify-between pt-2">
               {(role === "admin" || role === "super_admin") && (
-                <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/admin" })}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate({ to: "/admin" })}
+                >
                   Admin panel
                 </Button>
               )}
@@ -248,7 +270,9 @@ function ScanPage() {
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <MapPin className="h-4 w-4 shrink-0 text-primary" />
-            <span className="truncate text-sm font-medium">{activeSchool?.name}</span>
+            <span className="truncate text-sm font-medium">
+              {activeSchool?.name}
+            </span>
           </div>
           <Button variant="ghost" size="sm" onClick={() => signOut()}>
             <LogOut className="mr-1 h-4 w-4" />
@@ -262,7 +286,11 @@ function ScanPage() {
         <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
           <span>Point camera at the barcode</span>
           {paused && (
-            <Button size="sm" variant="outline" onClick={() => setPaused(false)}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setPaused(false)}
+            >
               Resume camera
             </Button>
           )}
@@ -302,7 +330,9 @@ function ScanPage() {
               <Label>Publisher</Label>
               <Input
                 value={form.publisher}
-                onChange={(e) => setForm({ ...form, publisher: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, publisher: e.target.value })
+                }
               />
             </div>
             <div className="space-y-1.5">
@@ -319,14 +349,18 @@ function ScanPage() {
                 type="number"
                 min={1}
                 value={form.quantity}
-                onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) || 1 })}
+                onChange={(e) =>
+                  setForm({ ...form, quantity: Number(e.target.value) || 1 })
+                }
               />
             </div>
             <div className="space-y-1.5">
               <Label>Condition</Label>
               <Select
                 value={form.condition}
-                onValueChange={(v) => setForm({ ...form, condition: v as typeof form.condition })}
+                onValueChange={(v) =>
+                  setForm({ ...form, condition: v as typeof form.condition })
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -371,7 +405,9 @@ function ScanPage() {
         </CardHeader>
         <CardContent className="px-0">
           {records.length === 0 ? (
-            <p className="px-6 py-4 text-sm text-muted-foreground">No records yet.</p>
+            <p className="px-6 py-4 text-sm text-muted-foreground">
+              No records yet.
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -388,9 +424,13 @@ function ScanPage() {
                     <tr key={r.id} className="border-t">
                       <td className="px-3 py-2">
                         <div className="font-medium">{r.title ?? "—"}</div>
-                        <div className="text-xs text-muted-foreground">{r.author ?? ""}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {r.author ?? ""}
+                        </div>
                       </td>
-                      <td className="px-3 py-2 font-mono text-xs">{r.isbn ?? "—"}</td>
+                      <td className="px-3 py-2 font-mono text-xs">
+                        {r.isbn ?? "—"}
+                      </td>
                       <td className="px-3 py-2">{r.quantity}</td>
                       <td className="px-3 py-2 text-right">
                         <Button

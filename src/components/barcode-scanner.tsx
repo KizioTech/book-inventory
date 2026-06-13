@@ -22,14 +22,21 @@ export function BarcodeScanner({ onDetected, paused }: Props) {
 
     (async () => {
       try {
-        const controls = await reader.decodeFromVideoDevice(
-          undefined,
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error("Camera requires a secure context (HTTPS) or localhost.");
+        }
+        const controls = await reader.decodeFromConstraints(
+          { video: { facingMode: "environment" } },
           videoRef.current!,
-          (result) => {
+          (result, err) => {
             if (cancelled || !result) return;
             const code = result.getText();
             const now = Date.now();
-            if (lastCodeRef.current.code === code && now - lastCodeRef.current.ts < 2000) return;
+            if (
+              lastCodeRef.current.code === code &&
+              now - lastCodeRef.current.ts < 2000
+            )
+              return;
             lastCodeRef.current = { code, ts: now };
             if (navigator.vibrate) navigator.vibrate(80);
             onDetected(code);
@@ -38,6 +45,7 @@ export function BarcodeScanner({ onDetected, paused }: Props) {
         controlsRef.current = controls;
         setActive(true);
       } catch (e) {
+        console.error("Camera error:", e);
         setError(e instanceof Error ? e.message : "Camera unavailable");
         setActive(false);
       }
@@ -65,7 +73,12 @@ export function BarcodeScanner({ onDetected, paused }: Props) {
 
   return (
     <div className="relative overflow-hidden rounded-lg bg-black aspect-[4/3]">
-      <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />
+      <video
+        ref={videoRef}
+        className="h-full w-full object-cover"
+        playsInline
+        muted
+      />
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="h-1/3 w-4/5 rounded-md border-2 border-primary/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
       </div>

@@ -1,4 +1,10 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -18,7 +24,6 @@ interface AuthCtx {
   role: AppRole | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -34,7 +39,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadProfile = async (uid: string) => {
     const [{ data: p }, { data: r }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name, email, active").eq("id", uid).maybeSingle(),
+      supabase
+        .from("profiles")
+        .select("id, full_name, email, active")
+        .eq("id", uid)
+        .maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", uid),
     ]);
     setProfile(p as Profile | null);
@@ -47,6 +56,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ? "clerk"
           : null;
     setRole(best);
+
+    if (p && !p.active) {
+      await supabase.auth.signOut();
+    }
   };
 
   useEffect(() => {
@@ -72,16 +85,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn: AuthCtx["signIn"] = async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return error ? { error: error.message } : {};
-  };
-
-  const signUp: AuthCtx["signUp"] = async (email, password, fullName) => {
-    const redirectUrl = `${window.location.origin}/`;
-    const { error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
-      options: { emailRedirectTo: redirectUrl, data: { full_name: fullName } },
     });
     return error ? { error: error.message } : {};
   };
@@ -95,7 +101,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ user, session, profile, role, loading, signIn, signUp, signOut, refresh }}>
+    <Ctx.Provider
+      value={{
+        user,
+        session,
+        profile,
+        role,
+        loading,
+        signIn,
+        signOut,
+        refresh,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );
