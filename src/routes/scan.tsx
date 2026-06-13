@@ -142,12 +142,7 @@ function ScanPage() {
       const meta = await lookupIsbn(code);
       
       if (meta && (meta.title || meta.author)) {
-        setForm((f) => ({ 
-          ...f, 
-          ...meta,
-          // Preserve the original ISBN if lookup returned empty
-          isbn: meta.isbn || code 
-        }));
+        setForm((f) => ({ ...f, ...meta, isbn: code }));
         toast.success(meta.title || "Book details loaded", { id: loadingToast });
       } else {
         toast.warning("No metadata found — please fill in manually", { id: loadingToast });
