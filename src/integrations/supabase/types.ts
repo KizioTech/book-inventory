@@ -14,16 +14,191 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      books: {
+        Row: {
+          author: string | null
+          clerk_id: string
+          condition: string | null
+          created_at: string
+          id: string
+          isbn: string | null
+          notes: string | null
+          publisher: string | null
+          quantity: number
+          school_id: string
+          title: string | null
+          year: string | null
+        }
+        Insert: {
+          author?: string | null
+          clerk_id: string
+          condition?: string | null
+          created_at?: string
+          id?: string
+          isbn?: string | null
+          notes?: string | null
+          publisher?: string | null
+          quantity?: number
+          school_id: string
+          title?: string | null
+          year?: string | null
+        }
+        Update: {
+          author?: string | null
+          clerk_id?: string
+          condition?: string | null
+          created_at?: string
+          id?: string
+          isbn?: string | null
+          notes?: string | null
+          publisher?: string | null
+          quantity?: number
+          school_id?: string
+          title?: string | null
+          year?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "books_clerk_id_fkey"
+            columns: ["clerk_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "books_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clerk_schools: {
+        Row: {
+          clerk_id: string
+          school_id: string
+        }
+        Insert: {
+          clerk_id: string
+          school_id: string
+        }
+        Update: {
+          clerk_id?: string
+          school_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clerk_schools_clerk_id_fkey"
+            columns: ["clerk_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clerk_schools_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          active: boolean
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
+      schools: {
+        Row: {
+          active: boolean
+          contact: string | null
+          created_at: string
+          district: string | null
+          id: string
+          name: string
+          notes: string | null
+          region: string | null
+        }
+        Insert: {
+          active?: boolean
+          contact?: string | null
+          created_at?: string
+          district?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          region?: string | null
+        }
+        Update: {
+          active?: boolean
+          contact?: string | null
+          created_at?: string
+          district?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          region?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      clerk_has_school: {
+        Args: { _school_id: string; _user_id: string }
+        Returns: boolean
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_staff: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "super_admin" | "admin" | "clerk"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +325,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["super_admin", "admin", "clerk"],
+    },
   },
 } as const
