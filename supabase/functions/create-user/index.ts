@@ -1,5 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,128 +6,122 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req: Request) => {
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function friendly(message: string): string {
+  if (/already registered|already been registered/i.test(message))
+    return "An account with this email already exists.";
+  if (/Password should be at least/i.test(message))
+    return "Password must be at least 6 characters.";
+  if (/invalid email/i.test(message))
+    return "Please enter a valid email address.";
+  return message;
+}
+
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", // Uses service role to bypass RLS
-    );
+    if (req.method !== "POST") {
+      return json({ error: "Method not allowed" }, 405);
+    }
 
-    // Verify caller has permissions (is admin/super_admin)
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    if (!SUPABASE_URL || !SERVICE_KEY) {
+      return json({ error: "Server is missing Supabase configuration." }, 500);
+    }
+
+    const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // Verify caller is staff
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Missing Auth header" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
+    if (!authHeader) return json({ error: "Missing authorization header" }, 401);
     const token = authHeader.replace("Bearer ", "");
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseClient.auth.getUser(token);
+    const { data: userData, error: userErr } =
+      await supabaseAdmin.auth.getUser(token);
+    if (userErr || !userData.user) return json({ error: "Invalid token" }, 401);
 
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid token" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Check role
-    const { data: roleData, error: roleError } = await supabaseClient
+    const { data: callerRoles } = await supabaseAdmin
       .from("user_roles")
       .select("role")
-      .eq("user_id", user.id);
-
-    if (roleError) throw roleError;
-
-    const roles = roleData.map((r: { role: string }) => r.role);
+      .eq("user_id", userData.user.id);
+    const roles = (callerRoles ?? []).map((r: { role: string }) => r.role);
     const isStaff = roles.includes("admin") || roles.includes("super_admin");
+    if (!isStaff) return json({ error: "Forbidden: admins only" }, 403);
 
-    if (!isStaff) {
-      return new Response(JSON.stringify({ error: "Forbidden: Admins only" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const body = await req.json().catch(() => ({}));
+    const { full_name, email, password, role, school_ids } = body ?? {};
 
-    // Parse body
-    const { email, password, full_name, role, school_ids } = await req.json();
-
-    if (!email || !password || !full_name || !role) {
-      return new Response(
-        JSON.stringify({ error: "Missing required fields" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+    if (!full_name || !email || !password || !role) {
+      return json(
+        { error: "full_name, email, password, and role are required" },
+        400,
       );
     }
-
-    // Only super_admin can create admin
+    if (!["admin", "clerk"].includes(role)) {
+      return json({ error: "role must be admin or clerk" }, 400);
+    }
     if (role === "admin" && !roles.includes("super_admin")) {
-      return new Response(
-        JSON.stringify({
-          error: "Forbidden: Only Super Admin can create Admins",
-        }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return json({ error: "Only a Super Admin can create Admins." }, 403);
     }
 
     // 1. Create auth user
-    const { data: newUser, error: createError } =
-      await supabaseClient.auth.admin.createUser({
+    const { data: authData, error: authError } =
+      await supabaseAdmin.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
         user_metadata: { full_name },
       });
+    if (authError || !authData.user) {
+      return json({ error: friendly(authError?.message ?? "Failed to create user") }, 400);
+    }
+    const userId = authData.user.id;
 
-    if (createError) throw createError;
-
-    const newUserId = newUser.user.id;
-
-    // 2. Set profile name (auth trigger might create it, but we can update it just in case)
-    await supabaseClient
+    // 2. Upsert profile (trigger may have inserted already)
+    const { error: profileError } = await supabaseAdmin
       .from("profiles")
-      .upsert({ id: newUserId, full_name, email });
-
-    // 3. Set role
-    await supabaseClient
-      .from("user_roles")
-      .insert({ user_id: newUserId, role });
-
-    // 4. Set schools (if clerk)
-    if (
-      role === "clerk" &&
-      Array.isArray(school_ids) &&
-      school_ids.length > 0
-    ) {
-      const clerkSchools = school_ids.map((school_id: string) => ({
-        clerk_id: newUserId,
-        school_id,
-      }));
-      await supabaseClient.from("clerk_schools").insert(clerkSchools);
+      .upsert({ id: userId, full_name, email, active: true });
+    if (profileError) {
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return json({ error: profileError.message }, 500);
     }
 
-    return new Response(JSON.stringify({ success: true, user: newUser.user }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
+    // 3. Set role (replace any default the trigger set)
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+    const { error: roleError } = await supabaseAdmin
+      .from("user_roles")
+      .insert({ user_id: userId, role });
+    if (roleError) {
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return json({ error: roleError.message }, 500);
+    }
+
+    // 4. Assign schools (clerks only)
+    if (role === "clerk" && Array.isArray(school_ids) && school_ids.length) {
+      const rows = school_ids.map((school_id: string) => ({
+        clerk_id: userId,
+        school_id,
+      }));
+      const { error: assignError } = await supabaseAdmin
+        .from("clerk_schools")
+        .insert(rows);
+      if (assignError) return json({ error: assignError.message }, 500);
+    }
+
+    return json({ success: true, user_id: userId });
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : "Unknown error";
-    return new Response(JSON.stringify({ error: errorMsg }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
+    const message = err instanceof Error ? err.message : String(err);
+    return json({ error: friendly(message) }, 500);
   }
 });

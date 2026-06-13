@@ -1,12 +1,19 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  BookOpen,
-  LogOut,
   Plus,
   Trash2,
   Download,
-  ScanLine,
+  Loader2,
+  AlertCircle,
+  Eye,
+  EyeOff,
+  BookOpen,
+  Users,
+  School as SchoolIcon,
+  BarChart2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,14 +21,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -35,6 +40,8 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import { downloadCsv, toCsv } from "@/lib/csv";
+import { StatusBadge, type StatusValue } from "@/components/status-badge";
+import { AdminSidebar, type AdminTab } from "@/components/admin-sidebar";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
@@ -75,9 +82,28 @@ interface BookRow {
   created_at: string;
 }
 
+function timeAgo(iso: string) {
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return "Just now";
+  if (m < 60) return `${m} min${m > 1 ? "s" : ""} ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} hr${h > 1 ? "s" : ""} ago`;
+  return `${Math.floor(h / 24)} day${Math.floor(h / 24) > 1 ? "s" : ""} ago`;
+}
+
+function schoolStatus(active: boolean, lastEntry?: string): StatusValue {
+  if (!active) return "paused";
+  if (!lastEntry) return "idle";
+  const diffMin = (Date.now() - new Date(lastEntry).getTime()) / 60000;
+  if (diffMin < 30) return "active";
+  if (diffMin < 180) return "slow";
+  return "idle";
+}
+
 function AdminPage() {
   const { user, role, loading, profile, signOut } = useAuth();
   const navigate = useNavigate();
+  const [tab, setTab] = useState<AdminTab>("schools");
 
   useEffect(() => {
     if (loading) return;
@@ -88,60 +114,51 @@ function AdminPage() {
 
   if (loading || !user || (role !== "super_admin" && role !== "admin")) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-muted-foreground">
+      <div className="flex min-h-screen items-center justify-center text-slate-500">
         Loading…
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-12">
-      <header className="flex items-center justify-between border-b py-4">
-        <div className="flex items-center gap-2">
-          <img src="/blue-logo.png" alt="Logo" className="h-5 w-auto object-contain" />
-          <h1 className="text-lg font-semibold">Admin Panel</h1>
-          <Badge variant="secondary" className="ml-2 capitalize">
-            {role?.replace("_", " ")}
-          </Badge>
+    <div className="flex min-h-screen bg-slate-50">
+      <AdminSidebar
+        active={tab}
+        onChange={setTab}
+        fullName={profile?.full_name}
+        role={role}
+        onSignOut={() => signOut()}
+      />
+      <main className="flex-1 overflow-y-auto p-4 md:p-8">
+        <div className="mx-auto max-w-5xl space-y-6">
+          {tab === "schools" && <SchoolsTab />}
+          {tab === "users" && <UsersTab />}
+          {tab === "records" && <RecordsTab />}
+          {tab === "export" && <ExportTab />}
         </div>
-        <div className="flex items-center gap-2">
-          <span className="hidden text-sm text-muted-foreground sm:inline">
-            {profile?.full_name}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate({ to: "/scan" })}
-          >
-            <ScanLine className="mr-1 h-4 w-4" />
-            Scan
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => signOut()}>
-            <LogOut className="mr-1 h-4 w-4" /> Log out
-          </Button>
-        </div>
-      </header>
+      </main>
+    </div>
+  );
+}
 
-      <Tabs defaultValue="schools" className="mt-6">
-        <TabsList>
-          <TabsTrigger value="schools">Schools</TabsTrigger>
-          <TabsTrigger value="users">Users</TabsTrigger>
-          <TabsTrigger value="records">Records</TabsTrigger>
-          <TabsTrigger value="export">Export</TabsTrigger>
-        </TabsList>
-        <TabsContent value="schools">
-          <SchoolsTab />
-        </TabsContent>
-        <TabsContent value="users">
-          <UsersTab />
-        </TabsContent>
-        <TabsContent value="records">
-          <RecordsTab />
-        </TabsContent>
-        <TabsContent value="export">
-          <ExportTab />
-        </TabsContent>
-      </Tabs>
+function SectionHeader({
+  title,
+  subtitle,
+  action,
+}: {
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
+        {subtitle && (
+          <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>
+        )}
+      </div>
+      {action}
     </div>
   );
 }
@@ -151,10 +168,11 @@ function AdminPage() {
 function SchoolsTab() {
   const [schools, setSchools] = useState<School[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [lastEntries, setLastEntries] = useState<Record<string, string>>({});
   const [clerkCounts, setClerkCounts] = useState<Record<string, number>>({});
+  const [lastEntries, setLastEntries] = useState<Record<string, string>>({});
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<School | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const load = async () => {
     const { data } = await supabase
@@ -162,29 +180,24 @@ function SchoolsTab() {
       .select("*")
       .order("created_at", { ascending: false });
     setSchools((data as School[]) ?? []);
+
     const { data: books } = await supabase
       .from("books")
-      .select("school_id, created_at");
+      .select("school_id, created_at, quantity");
     const c: Record<string, number> = {};
     const latest: Record<string, string> = {};
-    (books ?? []).forEach((b: { school_id: string; created_at: string }) => {
-      c[b.school_id] = (c[b.school_id] ?? 0) + 1;
-      if (
-        !latest[b.school_id] ||
-        new Date(b.created_at) > new Date(latest[b.school_id])
-      ) {
+    (books ?? []).forEach((b: any) => {
+      c[b.school_id] = (c[b.school_id] ?? 0) + (b.quantity ?? 1);
+      if (!latest[b.school_id] || new Date(b.created_at) > new Date(latest[b.school_id]))
         latest[b.school_id] = b.created_at;
-      }
     });
     setCounts(c);
     setLastEntries(latest);
 
-    const { data: clerkSchools } = await supabase
-      .from("clerk_schools")
-      .select("school_id");
+    const { data: cs } = await supabase.from("clerk_schools").select("school_id");
     const cc: Record<string, number> = {};
-    (clerkSchools ?? []).forEach((cs: { school_id: string }) => {
-      cc[cs.school_id] = (cc[cs.school_id] ?? 0) + 1;
+    (cs ?? []).forEach((r: any) => {
+      cc[r.school_id] = (cc[r.school_id] ?? 0) + 1;
     });
     setClerkCounts(cc);
   };
@@ -202,18 +215,13 @@ function SchoolsTab() {
       contact: String(f.get("contact") || "") || null,
       notes: String(f.get("notes") || "") || null,
     };
-    if (editing) {
-      const { error } = await supabase
-        .from("schools")
-        .update(payload)
-        .eq("id", editing.id);
-      if (error) return toast.error(error.message);
-      toast.success("Updated");
-    } else {
-      const { error } = await supabase.from("schools").insert(payload);
-      if (error) return toast.error(error.message);
-      toast.success("School added");
-    }
+    setSaving(true);
+    const res = editing
+      ? await supabase.from("schools").update(payload).eq("id", editing.id)
+      : await supabase.from("schools").insert(payload);
+    setSaving(false);
+    if (res.error) return toast.error(res.error.message);
+    toast.success(editing ? "School updated" : "School added");
     setOpen(false);
     setEditing(null);
     load();
@@ -224,193 +232,129 @@ function SchoolsTab() {
     load();
   };
 
-  const getStatus = (s: School) => {
-    if (!s.active)
-      return {
-        label: "Paused",
-        variant: "outline",
-        className: "bg-slate-100 text-slate-600",
-        icon: "⏸",
-      };
-    const last = lastEntries[s.id];
-    if (!last)
-      return {
-        label: "Not started",
-        variant: "outline",
-        className: "bg-red-50 text-red-600 border-red-200",
-        icon: "🔴",
-      };
-
-    const diffMins = (Date.now() - new Date(last).getTime()) / (1000 * 60);
-    if (diffMins < 30)
-      return {
-        label: "Active",
-        variant: "default",
-        className: "bg-green-600 hover:bg-green-700 text-white",
-        icon: "🟢",
-      };
-    if (diffMins < 180)
-      return {
-        label: "Slow",
-        variant: "outline",
-        className: "bg-amber-50 text-amber-600 border-amber-200",
-        icon: "🟡",
-      };
-    return {
-      label: "Inactive",
-      variant: "outline",
-      className: "bg-slate-50 text-slate-500",
-      icon: "⚪",
-    };
-  };
-
-  const formatTimeAgo = (isoDate: string) => {
-    const diffMins = Math.round(
-      (Date.now() - new Date(isoDate).getTime()) / 60000,
-    );
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins} mins ago`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours} hr${diffHours > 1 ? "s" : ""} ago`;
-    return `${Math.floor(diffHours / 24)} days ago`;
-  };
-
   return (
-    <Card className="mt-4">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Schools</CardTitle>
-        <Dialog
-          open={open}
-          onOpenChange={(o) => {
-            setOpen(o);
-            if (!o) setEditing(null);
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Plus className="mr-1 h-4 w-4" />
-              Add school
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {editing ? "Edit school" : "New school"}
-              </DialogTitle>
-            </DialogHeader>
-            <form onSubmit={save} className="space-y-3">
+    <div className="space-y-6">
+      <SectionHeader
+        title="Schools"
+        subtitle="Manage cataloguing sites"
+        action={
+          <Button
+            onClick={() => {
+              setEditing(null);
+              setOpen(true);
+            }}
+          >
+            <Plus className="mr-1 h-4 w-4" />
+            Add School
+          </Button>
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {schools.map((s) => {
+          const status = schoolStatus(s.active, lastEntries[s.id]);
+          return (
+            <div
+              key={s.id}
+              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+            >
+              <div className="font-semibold text-slate-900">{s.name}</div>
+              <div className="text-sm text-slate-500">
+                {s.district ?? "—"}
+                {s.region ? ` · ${s.region}` : ""}
+              </div>
+              <div className="mt-3 flex gap-4 text-sm text-slate-600">
+                <span className="flex items-center gap-1.5">
+                  <BookOpen size={14} />
+                  {(counts[s.id] ?? 0).toLocaleString()} books
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Users size={14} />
+                  {clerkCounts[s.id] ?? 0} clerks
+                </span>
+              </div>
+              <div className="mt-3 flex items-center justify-between">
+                <StatusBadge status={status} />
+                <span className="text-xs text-slate-400">
+                  {lastEntries[s.id]
+                    ? `Last entry: ${timeAgo(lastEntries[s.id])}`
+                    : "No entries yet"}
+                </span>
+              </div>
+              <div className="mt-4 flex justify-end gap-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setEditing(s);
+                    setOpen(true);
+                  }}
+                >
+                  Edit
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => toggleActive(s)}>
+                  {s.active ? "Pause" : "Unpause"}
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+        {schools.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500 md:col-span-2">
+            No schools yet — add one to get started.
+          </div>
+        )}
+      </div>
+
+      <Dialog
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          if (!o) setEditing(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editing ? "Edit school" : "Add school"}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={save} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>
+                School Name <span className="text-red-500">*</span>
+              </Label>
+              <Input name="name" required defaultValue={editing?.name ?? ""} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Name</Label>
-                <Input
-                  name="name"
-                  required
-                  defaultValue={editing?.name ?? ""}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>District</Label>
-                  <Input
-                    name="district"
-                    defaultValue={editing?.district ?? ""}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Region</Label>
-                  <Input name="region" defaultValue={editing?.region ?? ""} />
-                </div>
+                <Label>District</Label>
+                <Input name="district" defaultValue={editing?.district ?? ""} />
               </div>
               <div className="space-y-1.5">
-                <Label>Contact</Label>
-                <Input name="contact" defaultValue={editing?.contact ?? ""} />
+                <Label>Region</Label>
+                <Input name="region" defaultValue={editing?.region ?? ""} />
               </div>
-              <div className="space-y-1.5">
-                <Label>Notes</Label>
-                <Textarea name="notes" defaultValue={editing?.notes ?? ""} />
-              </div>
-              <DialogFooter>
-                <Button type="submit">{editing ? "Save" : "Create"}</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </CardHeader>
-      <CardContent className="px-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="px-4 py-2">Name</th>
-                <th className="px-4 py-2">Stats</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {schools.map((s) => {
-                const status = getStatus(s);
-                return (
-                  <tr key={s.id} className="border-t">
-                    <td className="px-4 py-2">
-                      <div className="font-medium text-base">🏫 {s.name}</div>
-                      <div className="text-muted-foreground text-xs">
-                        {s.district ?? "—"}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2 text-sm text-slate-600">
-                      <div>
-                        {counts[s.id]?.toLocaleString() ?? 0} books ·{" "}
-                        {clerkCounts[s.id] ?? 0} clerks
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {lastEntries[s.id]
-                          ? `Last entry: ${formatTimeAgo(lastEntries[s.id])}`
-                          : "No entries yet"}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2">
-                      <Badge
-                        variant={status.variant as any}
-                        className={status.className}
-                      >
-                        <span className="mr-1">{status.icon}</span>{" "}
-                        {status.label}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditing(s);
-                          setOpen(true);
-                        }}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleActive(s)}
-                      >
-                        {s.active ? "Pause" : "Unpause"}
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {schools.length === 0 && (
-                <tr>
-                  <td className="px-4 py-6 text-muted-foreground" colSpan={5}>
-                    No schools yet — add one.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Contact person</Label>
+              <Input name="contact" defaultValue={editing?.contact ?? ""} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Textarea name="notes" defaultValue={editing?.notes ?? ""} />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                {editing ? "Save" : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 
@@ -422,10 +366,9 @@ function UsersTab() {
   const [roles, setRoles] = useState<Record<string, string[]>>({});
   const [schools, setSchools] = useState<School[]>([]);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({});
-  const [open, setOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const [target, setTarget] = useState<Profile | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
 
   const load = async () => {
     const [{ data: ps }, { data: rs }, { data: sc }, { data: cs }] =
@@ -446,7 +389,7 @@ function UsersTab() {
     setRoles(rmap);
     setSchools((sc as School[]) ?? []);
     const amap: Record<string, string[]> = {};
-    ((cs as { clerk_id: string; school_id: string }[]) ?? []).forEach((c) => {
+    ((cs as any[]) ?? []).forEach((c) => {
       amap[c.clerk_id] = [...(amap[c.clerk_id] ?? []), c.school_id];
     });
     setAssignments(amap);
@@ -462,9 +405,10 @@ function UsersTab() {
     return "Clerk";
   };
 
-  const openAssign = (u: Profile) => {
-    setTarget(u);
-    setOpen(true);
+  const roleBadgeClass = (label: string) => {
+    if (label === "Super Admin") return "bg-slate-800 text-white";
+    if (label === "Admin") return "bg-purple-100 text-purple-700";
+    return "bg-blue-100 text-blue-700";
   };
 
   const setAssignmentsFor = async (uid: string, selected: string[]) => {
@@ -489,134 +433,111 @@ function UsersTab() {
     }
     await setAssignmentsFor(target.id, selected);
     toast.success("User updated");
-    setOpen(false);
+    setManageOpen(false);
     load();
   };
 
   const toggleActive = async (u: Profile) => {
-    await supabase
-      .from("profiles")
-      .update({ active: !u.active })
-      .eq("id", u.id);
+    await supabase.from("profiles").update({ active: !u.active }).eq("id", u.id);
     load();
   };
 
-  const handleCreateUser = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    const email = String(f.get("email"));
-    const password = String(f.get("password"));
-    const full_name = String(f.get("full_name"));
-    const role = String(f.get("role"));
-
-    // get selected schools
-    const schoolNodes = document.querySelectorAll(
-      'input[name="schools"]:checked',
-    );
-    const school_ids = Array.from(schoolNodes).map(
-      (n) => (n as HTMLInputElement).value,
-    );
-
-    setCreating(true);
-    const { data, error } = await supabase.functions.invoke("create-user", {
-      body: { email, password, full_name, role, school_ids },
-    });
-    setCreating(false);
-
-    if (error) {
-      toast.error(error.message || "Failed to create user");
-      return;
-    }
-
-    if (data?.error) {
-      toast.error(data.error);
-      return;
-    }
-
-    toast.success("User created successfully");
-    setCreateOpen(false);
-    load();
-  };
+  const activeCount = users.filter((u) => u.active).length;
 
   return (
-    <Card className="mt-4">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>Users</CardTitle>
-          <p className="text-xs text-muted-foreground mt-1">
-            Manage clerks and administrators across schools.
-          </p>
-        </div>
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-1 h-4 w-4" />
-          Add User
-        </Button>
-      </CardHeader>
-      <CardContent className="px-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="px-4 py-2">Name</th>
-                <th className="px-4 py-2">Email</th>
-                <th className="px-4 py-2">Role</th>
-                <th className="px-4 py-2">Schools</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id} className="border-t">
-                  <td className="px-4 py-2 font-medium">
-                    {u.full_name ?? "—"}
-                  </td>
-                  <td className="px-4 py-2 text-muted-foreground">{u.email}</td>
-                  <td className="px-4 py-2">{rankFor(u.id)}</td>
-                  <td className="px-4 py-2 text-xs text-muted-foreground">
-                    {(assignments[u.id] ?? [])
-                      .map((sid) => schools.find((s) => s.id === sid)?.name)
-                      .filter(Boolean)
-                      .join(", ") || "—"}
-                  </td>
-                  <td className="px-4 py-2">
-                    {u.active ? (
-                      <Badge>Active</Badge>
-                    ) : (
-                      <Badge variant="outline">Inactive</Badge>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openAssign(u)}
-                    >
-                      Manage
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleActive(u)}
-                    >
-                      {u.active ? "Deactivate" : "Activate"}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
+    <div className="space-y-6">
+      <SectionHeader
+        title="Users"
+        subtitle={`${activeCount} active account${activeCount !== 1 ? "s" : ""}`}
+        action={
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-1 h-4 w-4" />
+            Add User
+          </Button>
+        }
+      />
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <div className="space-y-3">
+        {users.map((u) => {
+          const rankLabel = rankFor(u.id);
+          const userSchools = (assignments[u.id] ?? [])
+            .map((sid) => schools.find((s) => s.id === sid)?.name)
+            .filter(Boolean) as string[];
+          const initials = (u.full_name ?? u.email ?? "U")
+            .split(" ")
+            .map((s) => s[0])
+            .slice(0, 2)
+            .join("")
+            .toUpperCase();
+          return (
+            <div
+              key={u.id}
+              className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${
+                !u.active ? "opacity-60" : ""
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
+                  {initials}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-slate-900">
+                      {u.full_name ?? "—"}
+                    </span>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${roleBadgeClass(
+                        rankLabel,
+                      )}`}
+                    >
+                      {rankLabel}
+                    </span>
+                    {!u.active && (
+                      <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-600">
+                        Disabled
+                      </span>
+                    )}
+                  </div>
+                  <div className="truncate text-sm text-slate-500">{u.email}</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {rankLabel === "Clerk"
+                      ? userSchools.length
+                        ? userSchools.slice(0, 2).join(", ") +
+                          (userSchools.length > 2
+                            ? ` + ${userSchools.length - 2} more`
+                            : "")
+                        : "No schools assigned"
+                      : `${rankLabel} access`}
+                  </div>
+                </div>
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setTarget(u);
+                      setManageOpen(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => toggleActive(u)}>
+                    {u.active ? "Disable" : "Enable"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <Dialog open={manageOpen} onOpenChange={setManageOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Manage {target?.full_name}</DialogTitle>
           </DialogHeader>
           {target && (
             <ManageUserForm
-              target={target}
               currentRole={
                 (roles[target.id]?.[0] as "clerk" | "admin" | "super_admin") ??
                 "clerk"
@@ -630,68 +551,226 @@ function UsersTab() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create new user</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleCreateUser} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Full Name</Label>
-              <Input name="full_name" required />
+      <CreateUserDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        schools={schools}
+        canCreateAdmin={myRole === "super_admin"}
+        onCreated={load}
+      />
+    </div>
+  );
+}
+
+function CreateUserDialog({
+  open,
+  onOpenChange,
+  schools,
+  canCreateAdmin,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  schools: School[];
+  canCreateAdmin: boolean;
+  onCreated: () => void;
+}) {
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [role, setRole] = useState<"clerk" | "admin">("clerk");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setFullName("");
+      setEmail("");
+      setPassword("");
+      setShowPwd(false);
+      setRole("clerk");
+      setSelected([]);
+      setError(null);
+    }
+  }, [open]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setCreating(true);
+    const { data, error: invokeErr } = await supabase.functions.invoke(
+      "create-user",
+      {
+        body: {
+          full_name: fullName,
+          email,
+          password,
+          role,
+          school_ids: role === "clerk" ? selected : [],
+        },
+      },
+    );
+    setCreating(false);
+
+    if (invokeErr) {
+      // Try to surface server error message
+      let msg = invokeErr.message || "Failed to create user";
+      const ctx = (invokeErr as any).context;
+      if (ctx?.body) {
+        try {
+          const body = typeof ctx.body === "string" ? JSON.parse(ctx.body) : ctx.body;
+          if (body?.error) msg = body.error;
+        } catch {
+          /* noop */
+        }
+      }
+      setError(msg);
+      return;
+    }
+    if (data?.error) {
+      setError(data.error);
+      return;
+    }
+    toast.success(`${fullName} added successfully.`);
+    onOpenChange(false);
+    onCreated();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add user</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-3">
+          {error && (
+            <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>{error}</span>
             </div>
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input name="email" type="email" required />
+          )}
+          <div className="space-y-1.5">
+            <Label>
+              Full Name <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>
+              Email <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>
+              Password <span className="text-red-500">*</span>
+            </Label>
+            <div className="relative">
+              <Input
+                type={showPwd ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={6}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd((s) => !s)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-500 hover:bg-slate-100"
+                aria-label={showPwd ? "Hide password" : "Show password"}
+              >
+                {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
-            <div className="space-y-1.5">
-              <Label>Temporary Password</Label>
-              <Input name="password" required minLength={6} />
+            <p className="text-xs text-slate-500">Min. 6 characters</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>
+              Role <span className="text-red-500">*</span>
+            </Label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="role"
+                  checked={role === "clerk"}
+                  onChange={() => setRole("clerk")}
+                />
+                Clerk
+              </label>
+              {canCreateAdmin && (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="role"
+                    checked={role === "admin"}
+                    onChange={() => setRole("admin")}
+                  />
+                  Admin
+                </label>
+              )}
             </div>
-            <div className="space-y-1.5">
-              <Label>Role</Label>
-              <Select name="role" defaultValue="clerk">
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="clerk">Clerk</SelectItem>
-                  {myRole === "super_admin" && (
-                    <SelectItem value="admin">Admin</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Assign schools (if clerk)</Label>
-              <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-md border p-3">
-                {schools.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    No schools available.
-                  </p>
-                )}
-                {schools.map((s) => (
-                  <label key={s.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      name="schools"
-                      value={s.id}
-                      className="rounded border-gray-300 text-primary focus:ring-primary"
+          </div>
+          <div className="space-y-1.5">
+            <Label>Assign schools (clerks only)</Label>
+            <div
+              className={`max-h-40 space-y-1.5 overflow-y-auto rounded-md border p-3 ${
+                role !== "clerk" ? "opacity-50 pointer-events-none" : ""
+              }`}
+            >
+              {schools.length === 0 && (
+                <p className="text-sm text-slate-500">No schools available.</p>
+              )}
+              {schools.map((s) => {
+                const checked = selected.includes(s.id);
+                return (
+                  <label
+                    key={s.id}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(v) =>
+                        setSelected(
+                          v
+                            ? [...selected, s.id]
+                            : selected.filter((x) => x !== s.id),
+                        )
+                      }
                     />
                     <span>{s.name}</span>
                   </label>
-                ))}
-              </div>
+                );
+              })}
             </div>
-            <DialogFooter>
-              <Button type="submit" disabled={creating}>
-                {creating ? "Creating..." : "Create"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </Card>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={creating}>
+              {creating && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              Create
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -702,7 +781,6 @@ function ManageUserForm({
   canEditRole,
   onSave,
 }: {
-  target: Profile;
   currentRole: "clerk" | "admin" | "super_admin";
   currentSchools: string[];
   schools: School[];
@@ -733,7 +811,7 @@ function ManageUserForm({
         <Label>Assigned schools</Label>
         <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-md border p-3">
           {schools.length === 0 && (
-            <p className="text-sm text-muted-foreground">Add schools first.</p>
+            <p className="text-sm text-slate-500">Add schools first.</p>
           )}
           {schools.map((s) => {
             const checked = selected.includes(s.id);
@@ -764,6 +842,8 @@ function ManageUserForm({
 
 // ---------------- Records tab ----------------
 
+const PAGE_SIZE = 50;
+
 function RecordsTab() {
   const [books, setBooks] = useState<BookRow[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
@@ -771,6 +851,7 @@ function RecordsTab() {
   const [schoolFilter, setSchoolFilter] = useState<string>("all");
   const [clerkFilter, setClerkFilter] = useState<string>("all");
   const [conditionFilter, setConditionFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     (async () => {
@@ -779,7 +860,7 @@ function RecordsTab() {
           .from("books")
           .select("*")
           .order("created_at", { ascending: false })
-          .limit(1000),
+          .limit(5000),
         supabase.from("schools").select("*").order("name"),
         supabase.from("profiles").select("id, full_name, email, active"),
       ]);
@@ -788,6 +869,10 @@ function RecordsTab() {
       setProfiles((ps as Profile[]) ?? []);
     })();
   }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [schoolFilter, clerkFilter, conditionFilter]);
 
   const filtered = useMemo(
     () =>
@@ -804,15 +889,33 @@ function RecordsTab() {
     const totalBooks = books.reduce((n, b) => n + (b.quantity ?? 1), 0);
     const activeSchools = new Set(books.map((b) => b.school_id)).size;
     const activeClerks = new Set(books.map((b) => b.clerk_id)).size;
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayBooks = books
       .filter((b) => new Date(b.created_at) >= today)
       .reduce((n, b) => n + (b.quantity ?? 1), 0);
-
     return { totalBooks, activeSchools, activeClerks, todayBooks };
   }, [books]);
+
+  // Per-school progress
+  const perSchool = useMemo(() => {
+    return schools.map((s) => {
+      const rows = books.filter((b) => b.school_id === s.id);
+      const total = rows.reduce((n, b) => n + (b.quantity ?? 1), 0);
+      const lastEntry = rows[0]?.created_at;
+      const clerks = new Set(rows.map((r) => r.clerk_id)).size;
+      return {
+        school: s,
+        total,
+        clerks,
+        lastEntry,
+        status: schoolStatus(s.active, lastEntry),
+      };
+    });
+  }, [schools, books]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const schoolName = (id: string) =>
     schools.find((s) => s.id === id)?.name ?? "—";
@@ -821,30 +924,91 @@ function RecordsTab() {
     profiles.find((p) => p.id === id)?.email ??
     "—";
 
+  const del = async (id: string) => {
+    if (!window.confirm("Delete this record?")) return;
+    await supabase.from("books").delete().eq("id", id);
+    setBooks((bs) => bs.filter((x) => x.id !== id));
+  };
+
   return (
-    <div className="mt-4 space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="space-y-6">
+      <SectionHeader title="Records" subtitle="Live activity across all schools" />
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <SummaryCard
           label="Total Books"
           value={totals.totalBooks.toLocaleString()}
+          icon={<BookOpen size={20} />}
         />
         <SummaryCard
           label="Schools"
-          value={`Active: ${totals.activeSchools}`}
+          value={String(totals.activeSchools)}
+          icon={<SchoolIcon size={20} />}
         />
-        <SummaryCard label="Clerks" value={`Active: ${totals.activeClerks}`} />
+        <SummaryCard
+          label="Clerks"
+          value={String(totals.activeClerks)}
+          icon={<Users size={20} />}
+        />
         <SummaryCard
           label="Today"
-          value={`${totals.todayBooks.toLocaleString()} books`}
+          value={totals.todayBooks.toLocaleString()}
+          icon={<BarChart2 size={20} />}
         />
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="border-b border-slate-100 px-5 py-3 text-sm font-semibold text-slate-700">
+          School Progress
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-4 py-2 text-left">School</th>
+                <th className="px-4 py-2 text-right">Books</th>
+                <th className="px-4 py-2 text-right">Clerks</th>
+                <th className="px-4 py-2 text-left">Last Entry</th>
+                <th className="px-4 py-2 text-left">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {perSchool.map((row) => (
+                <tr
+                  key={row.school.id}
+                  className="border-t border-slate-100 text-slate-700 hover:bg-slate-50"
+                >
+                  <td className="px-4 py-2 font-medium">{row.school.name}</td>
+                  <td className="px-4 py-2 text-right font-medium">
+                    {row.total.toLocaleString()}
+                  </td>
+                  <td className="px-4 py-2 text-right">{row.clerks}</td>
+                  <td className="px-4 py-2 text-slate-500">
+                    {row.lastEntry ? timeAgo(row.lastEntry) : "Never"}
+                  </td>
+                  <td className="px-4 py-2">
+                    <StatusBadge status={row.status} />
+                  </td>
+                </tr>
+              ))}
+              {perSchool.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                    No schools yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>Records</CardTitle>
+          <CardTitle className="text-base">Detailed records</CardTitle>
           <div className="flex flex-wrap gap-2">
             <Select value={schoolFilter} onValueChange={setSchoolFilter}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-40">
                 <SelectValue placeholder="School" />
               </SelectTrigger>
               <SelectContent>
@@ -857,7 +1021,7 @@ function RecordsTab() {
               </SelectContent>
             </Select>
             <Select value={clerkFilter} onValueChange={setClerkFilter}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-40">
                 <SelectValue placeholder="Clerk" />
               </SelectTrigger>
               <SelectContent>
@@ -870,7 +1034,7 @@ function RecordsTab() {
               </SelectContent>
             </Select>
             <Select value={conditionFilter} onValueChange={setConditionFilter}>
-              <SelectTrigger className="w-36">
+              <SelectTrigger className="w-32">
                 <SelectValue placeholder="Condition" />
               </SelectTrigger>
               <SelectContent>
@@ -885,75 +1049,119 @@ function RecordsTab() {
         <CardContent className="px-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase text-muted-foreground">
+              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-4 py-2">Title</th>
+                  <th className="px-4 py-2">#</th>
                   <th className="px-4 py-2">ISBN</th>
+                  <th className="px-4 py-2">Title</th>
                   <th className="px-4 py-2">School</th>
                   <th className="px-4 py-2">Clerk</th>
-                  <th className="px-4 py-2">Qty</th>
                   <th className="px-4 py-2">Cond.</th>
-                  <th className="px-4 py-2">When</th>
+                  <th className="px-4 py-2">Date</th>
                   <th className="px-4 py-2"></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((b) => (
-                  <tr key={b.id} className="border-t">
-                    <td className="px-4 py-2">
-                      <div className="font-medium">{b.title ?? "—"}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {b.author ?? ""}
-                      </div>
+                {pageRows.map((b, i) => (
+                  <tr
+                    key={b.id}
+                    className="border-t border-slate-100 hover:bg-slate-50"
+                  >
+                    <td className="px-4 py-2 text-slate-400">
+                      {(page - 1) * PAGE_SIZE + i + 1}
                     </td>
                     <td className="px-4 py-2 font-mono text-xs">
                       {b.isbn ?? "—"}
                     </td>
+                    <td className="px-4 py-2">
+                      <div className="font-medium">{b.title ?? "—"}</div>
+                      <div className="text-xs text-slate-500">
+                        {b.author ?? ""}
+                      </div>
+                    </td>
                     <td className="px-4 py-2">{schoolName(b.school_id)}</td>
                     <td className="px-4 py-2">{clerkName(b.clerk_id)}</td>
-                    <td className="px-4 py-2">{b.quantity}</td>
                     <td className="px-4 py-2">{b.condition ?? "—"}</td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">
+                    <td className="px-4 py-2 text-xs text-slate-500">
                       {new Date(b.created_at).toLocaleString()}
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={async () => {
-                          await supabase.from("books").delete().eq("id", b.id);
-                          setBooks((bs) => bs.filter((x) => x.id !== b.id));
-                        }}
+                      <button
+                        onClick={() => del(b.id)}
+                        aria-label="Delete"
+                        className="rounded p-1 hover:bg-red-50"
                       >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                        <Trash2
+                          size={15}
+                          className="text-red-400 hover:text-red-600"
+                        />
+                      </button>
                     </td>
                   </tr>
                 ))}
-                {filtered.length === 0 && (
+                {pageRows.length === 0 && (
                   <tr>
-                    <td className="px-4 py-6 text-muted-foreground" colSpan={8}>
-                      No records.
+                    <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
+                      No records match these filters.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+
+          {filtered.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
+              <span>
+                Showing {(page - 1) * PAGE_SIZE + 1}–
+                {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft size={14} /> Previous
+                </Button>
+                <span className="text-xs text-slate-500">
+                  Page {page} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Next <ChevronRight size={14} />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
+function SummaryCard({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
+}) {
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="text-xs uppercase text-muted-foreground">{label}</div>
-        <div className="mt-1 text-2xl font-semibold">{value}</div>
-      </CardContent>
-    </Card>
+    <div className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      {icon && (
+        <div className="absolute right-4 top-4 text-slate-300">{icon}</div>
+      )}
+      <div className="text-2xl font-bold text-slate-900">{value}</div>
+      <div className="mt-1 text-sm text-slate-500">{label}</div>
+    </div>
   );
 }
 
@@ -962,6 +1170,10 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 function ExportTab() {
   const [schools, setSchools] = useState<School[]>([]);
   const [schoolId, setSchoolId] = useState<string>("all");
+  const [range, setRange] = useState<"all" | "today" | "week" | "month">("all");
+  const [estimate, setEstimate] = useState<number>(0);
+  const [busy, setBusy] = useState(false);
+  const [lastExport, setLastExport] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
@@ -971,17 +1183,42 @@ function ExportTab() {
       .then(({ data }) => setSchools((data as School[]) ?? []));
   }, []);
 
-  const exportAll = async () => {
+  const buildQuery = (forCount = false) => {
     let q = supabase
       .from("books")
       .select(
-        "id, isbn, title, author, publisher, year, quantity, condition, notes, school_id, clerk_id, created_at, schools(name), profiles(full_name)",
-      )
-      .order("created_at", { ascending: false });
+        forCount
+          ? "id"
+          : "id, isbn, title, author, publisher, year, quantity, condition, notes, school_id, clerk_id, created_at, schools(name), profiles(full_name)",
+        forCount ? { count: "exact", head: true } : {},
+      );
     if (schoolId !== "all") q = q.eq("school_id", schoolId);
-    const { data, error } = await q;
+    if (range !== "all") {
+      const since = new Date();
+      if (range === "today") since.setHours(0, 0, 0, 0);
+      if (range === "week") since.setDate(since.getDate() - 7);
+      if (range === "month") since.setMonth(since.getMonth() - 1);
+      q = q.gte("created_at", since.toISOString());
+    }
+    return q;
+  };
+
+  useEffect(() => {
+    (async () => {
+      const { count } = await buildQuery(true);
+      setEstimate(count ?? 0);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schoolId, range]);
+
+  const exportAll = async () => {
+    setBusy(true);
+    const { data, error } = await buildQuery().order("created_at", {
+      ascending: false,
+    });
+    setBusy(false);
     if (error) return toast.error(error.message);
-    const rows = (data ?? []).map((b) => ({
+    const rows = (data ?? []).map((b: any) => ({
       id: b.id,
       isbn: b.isbn,
       title: b.title,
@@ -991,45 +1228,73 @@ function ExportTab() {
       quantity: b.quantity,
       condition: b.condition,
       notes: b.notes,
-      school_name:
-        (b.schools as unknown as { name: string } | null)?.name ?? "",
-      clerk_name:
-        (b.profiles as unknown as { full_name: string } | null)?.full_name ??
-        "",
+      school_name: b.schools?.name ?? "",
+      clerk_name: b.profiles?.full_name ?? "",
       recorded_at: b.created_at,
     }));
     if (rows.length === 0) return toast.error("Nothing to export");
     downloadCsv(`book-inventory-${Date.now()}.csv`, toCsv(rows));
     toast.success(`Exported ${rows.length} rows`);
+    setLastExport(new Date().toLocaleString());
   };
 
   return (
-    <Card className="mt-4">
-      <CardHeader>
-        <CardTitle>Export CSV</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-1.5">
-          <Label>Filter by school</Label>
-          <Select value={schoolId} onValueChange={setSchoolId}>
-            <SelectTrigger className="w-72">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All schools</SelectItem>
-              {schools.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+    <div className="space-y-6">
+      <SectionHeader
+        title="Export Records"
+        subtitle="Download book records as CSV for Excel"
+      />
+      <div className="max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-4 text-sm font-semibold text-slate-700">
+          Filter your export
         </div>
-        <Button onClick={exportAll}>
-          <Download className="mr-1 h-4 w-4" />
-          Download CSV
-        </Button>
-      </CardContent>
-    </Card>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>School</Label>
+            <Select value={schoolId} onValueChange={setSchoolId}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Schools</SelectItem>
+                {schools.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Date range</Label>
+            <Select value={range} onValueChange={(v) => setRange(v as any)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All time</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">This week</SelectItem>
+                <SelectItem value="month">This month</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={exportAll} disabled={busy} className="w-full">
+            {busy ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-1 h-4 w-4" />
+            )}
+            Download CSV
+          </Button>
+          <div className="text-sm text-slate-500">
+            Estimated rows: {estimate.toLocaleString()}
+          </div>
+          {lastExport && (
+            <div className="text-xs text-slate-400">Last export: {lastExport}</div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
