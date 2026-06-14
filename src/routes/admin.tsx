@@ -14,6 +14,7 @@ import {
   BarChart2,
   ChevronLeft,
   ChevronRight,
+  UserX,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -412,6 +413,8 @@ function UsersTab() {
   const [manageOpen, setManageOpen] = useState(false);
   const [target, setTarget] = useState<Profile | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     const [{ data: ps }, { data: rs }, { data: sc }, { data: cs }] =
@@ -483,6 +486,25 @@ function UsersTab() {
 
   const toggleActive = async (u: Profile) => {
     await supabase.from("profiles").update({ active: !u.active }).eq("id", u.id);
+    load();
+  };
+
+  const { user } = useAuth();
+  const myId = user?.id;
+
+  const deleteUser = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const { error: invokeErr } = await supabase.functions.invoke("delete-user", {
+      body: { user_id: deleteTarget.id },
+    });
+    setDeleting(false);
+    if (invokeErr) {
+      toast.error(invokeErr.message || "Failed to delete user");
+      return;
+    }
+    toast.success(`${deleteTarget.full_name ?? deleteTarget.email} has been deleted.`);
+    setDeleteTarget(null);
     load();
   };
 
@@ -568,6 +590,17 @@ function UsersTab() {
                   <Button size="sm" variant="ghost" onClick={() => toggleActive(u)}>
                     {u.active ? "Disable" : "Enable"}
                   </Button>
+                  {/* Don't allow deleting yourself or super admins */}
+                  {u.id !== myId && rankLabel !== "Super Admin" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                      onClick={() => setDeleteTarget(u)}
+                    >
+                      <UserX size={14} />
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -605,6 +638,38 @@ function UsersTab() {
         canCreateAdmin={myRole === "super_admin"}
         onCreated={load}
       />
+
+      {/* ── Delete confirmation dialog ─────────────────────────────── */}
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <UserX size={18} /> Delete account
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently delete{" "}
+              <span className="font-semibold text-slate-900">
+                {deleteTarget?.full_name ?? deleteTarget?.email}
+              </span>
+              's account, role, and all school assignments. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={deleteUser}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleting && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              Delete permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
