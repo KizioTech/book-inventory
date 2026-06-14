@@ -17,6 +17,7 @@ export type Database = {
       books: {
         Row: {
           author: string | null
+          category: string | null
           clerk_id: string
           condition: string | null
           created_at: string
@@ -26,11 +27,13 @@ export type Database = {
           publisher: string | null
           quantity: number
           school_id: string
+          shelf_location: string | null
           title: string | null
           year: string | null
         }
         Insert: {
           author?: string | null
+          category?: string | null
           clerk_id: string
           condition?: string | null
           created_at?: string
@@ -40,11 +43,13 @@ export type Database = {
           publisher?: string | null
           quantity?: number
           school_id: string
+          shelf_location?: string | null
           title?: string | null
           year?: string | null
         }
         Update: {
           author?: string | null
+          category?: string | null
           clerk_id?: string
           condition?: string | null
           created_at?: string
@@ -54,6 +59,7 @@ export type Database = {
           publisher?: string | null
           quantity?: number
           school_id?: string
+          shelf_location?: string | null
           title?: string | null
           year?: string | null
         }

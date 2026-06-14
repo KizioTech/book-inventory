@@ -1189,7 +1189,7 @@ function ExportTab() {
       .select(
         forCount
           ? "id"
-          : "id, isbn, title, author, publisher, year, quantity, condition, notes, school_id, clerk_id, created_at, schools(name), profiles(full_name)",
+          : "title, author, isbn, publisher, year, category, quantity, condition, shelf_location, notes",
         forCount ? { count: "exact", head: true } : {},
       );
     if (schoolId !== "all") q = q.eq("school_id", schoolId);
@@ -1219,21 +1219,31 @@ function ExportTab() {
     setBusy(false);
     if (error) return toast.error(error.message);
     const rows = (data ?? []).map((b: any) => ({
-      id: b.id,
-      isbn: b.isbn,
-      title: b.title,
-      author: b.author,
-      publisher: b.publisher,
-      year: b.year,
-      quantity: b.quantity,
-      condition: b.condition,
-      notes: b.notes,
-      school_name: b.schools?.name ?? "",
-      clerk_name: b.profiles?.full_name ?? "",
-      recorded_at: b.created_at,
+      book_title: b.title ?? "",
+      author: b.author ?? "",
+      isbn: b.isbn ?? "",
+      publisher: b.publisher ?? "",
+      year_published: b.year ?? "",
+      category_name: b.category ?? "",
+      book_copies: b.quantity ?? "",
+      status: b.condition ?? "",
+      shelf_location: b.shelf_location ?? "",
+      description: b.notes ?? "",
     }));
     if (rows.length === 0) return toast.error("Nothing to export");
-    downloadCsv(`book-inventory-${Date.now()}.csv`, toCsv(rows));
+    const columns = [
+      "book_title",
+      "author",
+      "isbn",
+      "publisher",
+      "year_published",
+      "category_name",
+      "book_copies",
+      "status",
+      "shelf_location",
+      "description",
+    ];
+    downloadCsv(`book-inventory-${Date.now()}.csv`, toCsv(rows, columns));
     toast.success(`Exported ${rows.length} rows`);
     setLastExport(new Date().toLocaleString());
   };

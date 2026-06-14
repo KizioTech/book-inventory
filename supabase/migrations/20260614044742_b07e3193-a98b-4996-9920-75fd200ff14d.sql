@@ -1,0 +1,1 @@
+ALTER TABLE public.books ADD COLUMN IF NOT EXISTS category text; ALTER TABLE public.books ADD COLUMN IF NOT EXISTS shelf_location text;
