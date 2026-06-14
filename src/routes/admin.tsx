@@ -37,7 +37,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import { downloadCsv, toCsv } from "@/lib/csv";
@@ -48,6 +47,7 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
+// Type definitions
 interface School {
   id: string;
   name: string;
@@ -58,16 +58,19 @@ interface School {
   active: boolean;
   created_at: string;
 }
+
 interface Profile {
   id: string;
   full_name: string | null;
   email: string | null;
   active: boolean;
 }
+
 interface RoleRow {
   user_id: string;
   role: "super_admin" | "admin" | "clerk";
 }
+
 interface BookRow {
   id: string;
   isbn: string | null;
@@ -81,6 +84,41 @@ interface BookRow {
   school_id: string;
   clerk_id: string;
   created_at: string;
+}
+
+interface BookSummary {
+  school_id: string;
+  created_at: string;
+  quantity: number;
+}
+
+interface ClerkSchoolAssignment {
+  clerk_id: string;
+  school_id: string;
+}
+
+interface ExportBookData {
+  title: string | null;
+  author: string | null;
+  isbn: string | null;
+  publisher: string | null;
+  year: string | null;
+  category: string | null;
+  quantity: number;
+  condition: string | null;
+  shelf_location: string | null;
+  notes: string | null;
+}
+
+interface CreateUserResponse {
+  error?: string;
+}
+
+interface FunctionInvokeError {
+  message: string;
+  context?: {
+    body?: unknown;
+  };
 }
 
 function timeAgo(iso: string) {
@@ -187,7 +225,7 @@ function SchoolsTab() {
       .select("school_id, created_at, quantity");
     const c: Record<string, number> = {};
     const latest: Record<string, string> = {};
-    (books ?? []).forEach((b: any) => {
+    (books ?? []).forEach((b: BookSummary) => {
       c[b.school_id] = (c[b.school_id] ?? 0) + (b.quantity ?? 1);
       if (!latest[b.school_id] || new Date(b.created_at) > new Date(latest[b.school_id]))
         latest[b.school_id] = b.created_at;
@@ -197,11 +235,12 @@ function SchoolsTab() {
 
     const { data: cs } = await supabase.from("clerk_schools").select("school_id");
     const cc: Record<string, number> = {};
-    (cs ?? []).forEach((r: any) => {
+    (cs ?? []).forEach((r: { school_id: string }) => {
       cc[r.school_id] = (cc[r.school_id] ?? 0) + 1;
     });
     setClerkCounts(cc);
   };
+  
   useEffect(() => {
     load();
   }, []);
@@ -393,11 +432,12 @@ function UsersTab() {
     setRoles(rmap);
     setSchools((sc as School[]) ?? []);
     const amap: Record<string, string[]> = {};
-    ((cs as any[]) ?? []).forEach((c) => {
+    ((cs as ClerkSchoolAssignment[]) ?? []).forEach((c) => {
       amap[c.clerk_id] = [...(amap[c.clerk_id] ?? []), c.school_id];
     });
     setAssignments(amap);
   };
+  
   useEffect(() => {
     load();
   }, []);
@@ -466,7 +506,7 @@ function UsersTab() {
           const rankLabel = rankFor(u.id);
           const userSchools = (assignments[u.id] ?? [])
             .map((sid) => schools.find((s) => s.id === sid)?.name)
-            .filter(Boolean) as string[];
+            .filter((name): name is string => Boolean(name));
           const initials = (u.full_name ?? u.email ?? "U")
             .split(" ")
             .map((s) => s[0])
@@ -607,7 +647,7 @@ function CreateUserDialog({
     e.preventDefault();
     setError(null);
     setCreating(true);
-    const { data, error: invokeErr } = await supabase.functions.invoke(
+    const { data, error: invokeErr } = await supabase.functions.invoke<CreateUserResponse>(
       "create-user",
       {
         body: {
@@ -622,13 +662,16 @@ function CreateUserDialog({
     setCreating(false);
 
     if (invokeErr) {
-      // Try to surface server error message
       let msg = invokeErr.message || "Failed to create user";
-      const ctx = (invokeErr as any).context;
-      if (ctx?.body) {
+      const errWithCtx = invokeErr as FunctionInvokeError;
+      if (errWithCtx.context?.body) {
         try {
-          const body = typeof ctx.body === "string" ? JSON.parse(ctx.body) : ctx.body;
-          if (body?.error) msg = body.error;
+          const body = typeof errWithCtx.context.body === "string" 
+            ? JSON.parse(errWithCtx.context.body) 
+            : errWithCtx.context.body;
+          if (body && typeof body === "object" && "error" in body && body.error) {
+            msg = String(body.error);
+          }
         } catch {
           /* noop */
         }
@@ -904,7 +947,6 @@ function RecordsTab() {
     return { totalBooks, activeSchools, activeClerks, todayBooks };
   }, [books]);
 
-  // Per-school progress
   const perSchool = useMemo(() => {
     return schools.map((s) => {
       const rows = books.filter((b) => b.school_id === s.id);
@@ -1174,6 +1216,8 @@ function SummaryCard({
 
 // ---------------- Export tab ----------------
 
+// ---------------- Export tab ----------------
+
 function ExportTab() {
   const [schools, setSchools] = useState<School[]>([]);
   const [schoolId, setSchoolId] = useState<string>("all");
@@ -1190,29 +1234,26 @@ function ExportTab() {
       .then(({ data }) => setSchools((data as School[]) ?? []));
   }, []);
 
-  const buildQuery = (forCount = false) => {
-    let q = supabase
-      .from("books")
-      .select(
-        forCount
-          ? "id"
-          : "title, author, isbn, publisher, year, category, quantity, condition, shelf_location, notes",
-        forCount ? { count: "exact", head: true } : {},
-      );
-    if (schoolId !== "all") q = q.eq("school_id", schoolId);
+  const applyFilters = <T extends object>(q: T): T => {
+    let query = q as ReturnType<typeof supabase.from>;
+    if (schoolId !== "all") query = query.eq("school_id", schoolId);
     if (range !== "all") {
       const since = new Date();
       if (range === "today") since.setHours(0, 0, 0, 0);
       if (range === "week") since.setDate(since.getDate() - 7);
       if (range === "month") since.setMonth(since.getMonth() - 1);
-      q = q.gte("created_at", since.toISOString());
+      query = query.gte("created_at", since.toISOString());
     }
-    return q;
+    return query as unknown as T;
   };
 
+  // Re-fetch count whenever filters change
   useEffect(() => {
     (async () => {
-      const { count } = await buildQuery(true);
+      const base = supabase
+        .from("books")
+        .select("id", { count: "exact", head: true });
+      const { count } = await applyFilters(base);
       setEstimate(count ?? 0);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1220,97 +1261,115 @@ function ExportTab() {
 
   const exportAll = async () => {
     setBusy(true);
-    const { data, error } = await buildQuery().order("created_at", {
-      ascending: false,
-    });
+    const base = supabase
+      .from("books")
+      .select("title, author, isbn, publisher, year, category, quantity, condition, shelf_location, notes")
+      .order("created_at", { ascending: false });
+
+    const { data, error } = await applyFilters(base);
     setBusy(false);
+
     if (error) return toast.error(error.message);
-    const rows = (data ?? []).map((b: any) => ({
-      book_title: b.title ?? "",
-      author: b.author ?? "",
-      isbn: b.isbn ?? "",
-      publisher: b.publisher ?? "",
-      year_published: b.year ?? "",
-      category_name: b.category ?? "",
-      book_copies: b.quantity ?? "",
-      status: b.condition ?? "",
+
+    const records = (data ?? []) as unknown as ExportBookData[];
+    if (records.length === 0) return toast.error("No records match the selected filters.");
+
+    const rows = records.map((b) => ({
+      book_title:    b.title         ?? "",
+      author:        b.author        ?? "",
+      isbn:          b.isbn          ?? "",
+      publisher:     b.publisher     ?? "",
+      year_published: b.year         ?? "",
+      category_name: b.category      ?? "",
+      book_copies:   b.quantity      ?? 0,
+      status:        b.condition     ?? "",
       shelf_location: b.shelf_location ?? "",
-      description: b.notes ?? "",
+      description:   b.notes         ?? "",
     }));
-    if (rows.length === 0) return toast.error("Nothing to export");
-    const columns = [
-      "book_title",
-      "author",
-      "isbn",
-      "publisher",
-      "year_published",
-      "category_name",
-      "book_copies",
-      "status",
-      "shelf_location",
-      "description",
+
+    const columns: (keyof (typeof rows)[0])[] = [
+      "book_title", "author", "isbn", "publisher",
+      "year_published", "category_name", "book_copies",
+      "status", "shelf_location", "description",
     ];
-    downloadCsv(`book-inventory-${Date.now()}.csv`, toCsv(rows, columns));
-    toast.success(`Exported ${rows.length} rows`);
+
+    const filename = `book-inventory-${schoolId === "all" ? "all-schools" : schoolId}-${Date.now()}.csv`;
+    downloadCsv(filename, toCsv(rows, columns));
+    toast.success(`Exported ${rows.length.toLocaleString()} rows`);
     setLastExport(new Date().toLocaleString());
+  };
+
+  const rangeLabel: Record<typeof range, string> = {
+    all:   "All time",
+    today: "Today",
+    week:  "This week",
+    month: "This month",
   };
 
   return (
     <div className="space-y-6">
       <SectionHeader
         title="Export Records"
-        subtitle="Download book records as CSV for Excel"
+        subtitle="Download book inventory as a CSV file"
       />
-      <div className="max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 text-sm font-semibold text-slate-700">
-          Filter your export
+
+      <div className="max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+        <p className="text-sm font-semibold text-slate-700">Filter your export</p>
+
+        {/* School filter */}
+        <div className="space-y-1.5">
+          <Label>School</Label>
+          <Select value={schoolId} onValueChange={setSchoolId}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Schools</SelectItem>
+              {schools.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label>School</Label>
-            <Select value={schoolId} onValueChange={setSchoolId}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Schools</SelectItem>
-                {schools.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Date range</Label>
-            <Select value={range} onValueChange={(v) => setRange(v as any)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All time</SelectItem>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="week">This week</SelectItem>
-                <SelectItem value="month">This month</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Button onClick={exportAll} disabled={busy} className="w-full">
-            {busy ? (
-              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="mr-1 h-4 w-4" />
-            )}
-            Download CSV
-          </Button>
-          <div className="text-sm text-slate-500">
-            Estimated rows: {estimate.toLocaleString()}
-          </div>
-          {lastExport && (
-            <div className="text-xs text-slate-400">Last export: {lastExport}</div>
-          )}
+
+        {/* Date range filter */}
+        <div className="space-y-1.5">
+          <Label>Date range</Label>
+          <Select value={range} onValueChange={(v) => setRange(v as typeof range)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(rangeLabel) as (typeof range)[]).map((key) => (
+                <SelectItem key={key} value={key}>
+                  {rangeLabel[key]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+
+        {/* Estimate + action */}
+        <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          {estimate === 0
+            ? "No records match the current filters."
+            : <>Ready to export <span className="font-semibold text-slate-900">{estimate.toLocaleString()}</span> row{estimate !== 1 ? "s" : ""}.</>
+          }
+        </div>
+
+        <Button onClick={exportAll} disabled={busy || estimate === 0} className="w-full">
+          {busy
+            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            : <Download className="mr-2 h-4 w-4" />
+          }
+          {busy ? "Exporting…" : "Download CSV"}
+        </Button>
+
+        {lastExport && (
+          <p className="text-xs text-slate-400 text-center">Last export: {lastExport}</p>
+        )}
       </div>
     </div>
   );
