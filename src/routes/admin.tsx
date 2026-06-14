@@ -24,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -316,6 +317,9 @@ function SchoolsTab() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editing ? "Edit school" : "Add school"}</DialogTitle>
+            <DialogDescription>
+              {editing ? "Update the school's details below." : "Fill in the details to add a new school."}
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={save} className="space-y-3">
             <div className="space-y-1.5">
@@ -535,6 +539,9 @@ function UsersTab() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Manage {target?.full_name}</DialogTitle>
+            <DialogDescription>
+              Update this user's role and school assignments.
+            </DialogDescription>
           </DialogHeader>
           {target && (
             <ManageUserForm
@@ -643,6 +650,9 @@ function CreateUserDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add user</DialogTitle>
+          <DialogDescription>
+            Create a new account and assign a role and schools.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3">
           {error && (
@@ -735,10 +745,7 @@ function CreateUserDialog({
               {schools.map((s) => {
                 const checked = selected.includes(s.id);
                 return (
-                  <label
-                    key={s.id}
-                    className="flex items-center gap-2 text-sm"
-                  >
+                  <label key={s.id} className="flex items-center gap-2 text-sm">
                     <Checkbox
                       checked={checked}
                       onCheckedChange={(v) =>

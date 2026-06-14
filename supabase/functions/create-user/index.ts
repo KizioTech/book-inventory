@@ -4,6 +4,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 function json(body: unknown, status = 200) {
@@ -24,8 +25,10 @@ function friendly(message: string): string {
 }
 
 Deno.serve(async (req: Request) => {
+  // Handle CORS preflight BEFORE anything else — a crash inside the
+  // try block must never prevent the preflight from succeeding.
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { status: 200, headers: corsHeaders });
   }
 
   try {
