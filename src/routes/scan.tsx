@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, LogOut, MapPin, Save, Trash2, Download, Search } from "lucide-react";
+import { BookOpen, LogOut, MapPin, Save, Trash2, Download, Search, Info } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { lookupIsbn } from "@/lib/google-books";
 import { BarcodeScanner } from "@/components/barcode-scanner";
 import { downloadCsv, toCsv } from "@/lib/csv";
+import { saveBookInBackground, flushQueue, BookFormValues } from "@/lib/bookQueue";
+import { RecoveryDialog } from "@/components/RecoveryDialog";
+import { BookDetailSheet, BookDetail } from "@/components/BookDetailSheet";
+import { EditBookDialog } from "@/components/EditBookDialog";
 
 export const Route = createFileRoute("/scan")({
   component: ScanPage,
@@ -64,6 +68,21 @@ function ScanPage() {
   const [paused, setPaused] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
+
+  const [scanCount, setScanCount] = useState<number>(() =>
+    parseInt(sessionStorage.getItem("scanCount") ?? "0", 10)
+  );
+  const [lastScanned, setLastScanned] = useState<string | null>(null);
+
+  const [recoveryData, setRecoveryData] = useState<BookFormValues | null>(null);
+  const [detailBook, setDetailBook] = useState<BookRow | null>(null);
+  const [editTarget, setEditTarget] = useState<BookRow | null>(null);
+
+  const incrementCount = () => {
+    const next = scanCount + 1;
+    setScanCount(next);
+    sessionStorage.setItem("scanCount", String(next));
+  };
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
@@ -124,6 +143,15 @@ function ScanPage() {
     if (!schoolId) return toast.error("Choose a school first");
     setLocked(true);
     await loadRecords(schoolId);
+    
+    // Attempt to flush any pending background queue from previous offline
+    flushQueue((failedBook) => {
+      setRecoveryData(failedBook);
+    });
+    
+    window.addEventListener("online", () => {
+      flushQueue((failedBook) => setRecoveryData(failedBook));
+    });
   };
 
   const handleDetected = async (code: string) => {
@@ -139,6 +167,23 @@ function ScanPage() {
     const loadingToast = toast.loading(`Looking up ${code}...`);
     
     try {
+      // 1. Check database first (prevent duplicates in current school)
+      const { data: existingDbBook } = await supabase
+        .from("books")
+        .select("*")
+        .eq("school_id", schoolId)
+        .eq("isbn", code)
+        .maybeSingle();
+
+      if (existingDbBook) {
+        toast.dismiss(loadingToast);
+        setEditTarget(existingDbBook as BookRow);
+        setForm({ ...empty, isbn: code });
+        setPaused(true);
+        return;
+      }
+
+      // 2. Fallback to Google Books
       const meta = await lookupIsbn(code);
       
       if (meta && (meta.title || meta.author)) {
@@ -146,7 +191,6 @@ function ScanPage() {
         toast.success(meta.title || "Book details loaded", { id: loadingToast });
       } else {
         toast.warning("No metadata found — please fill in manually", { id: loadingToast });
-        // Still update the ISBN field even if no metadata found
         setForm((f) => ({ ...f, isbn: code }));
       }
     } catch (error) {
@@ -166,9 +210,25 @@ function ScanPage() {
       toast.error("Enter an ISBN or a title");
       return;
     }
+
+    // Fuzzy duplicate warning (No ISBN)
+    if (!trimmedIsbn && form.title?.trim()) {
+      const { data: similar } = await supabase
+        .from("books")
+        .select("id, title, quantity")
+        .eq("school_id", schoolId)
+        .ilike("title", `%${form.title.trim()}%`)
+        .limit(3);
+
+      if (similar?.length) {
+        if (!window.confirm(`Found similar books in this school:\n${similar.map(s => `- ${s.title}`).join('\n')}\n\nDo you want to continue creating a new record?`)) {
+          return;
+        }
+      }
+    }
     
-    setSaving(true);
-    const { error } = await supabase.from("books").insert({
+    const payload: BookFormValues = {
+      id: crypto.randomUUID(), // Client generated ID
       isbn: trimmedIsbn || null,
       title: form.title?.trim() || null,
       author: form.author?.trim() || null,
@@ -179,18 +239,36 @@ function ScanPage() {
       notes: form.notes?.trim() || null,
       school_id: schoolId,
       clerk_id: user.id,
+    };
+
+    setSaving(true);
+
+    // Add optimistically to records immediately
+    const tempRow: BookRow = {
+      ...payload,
+      created_at: new Date().toISOString()
+    };
+    setRecords(prev => [tempRow, ...prev]);
+
+    saveBookInBackground(payload, (failedValues) => {
+      setRecoveryData(failedValues);
+    }, (deletedId) => {
+      // Undo callback
+      setRecords(prev => prev.filter(r => r.id !== deletedId));
     });
+
     setSaving(false);
+    incrementCount();
+    setLastScanned(`${payload.title || 'Untitled'} (×${payload.quantity})`);
     
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    
-    toast.success("Saved");
     setForm({ ...empty });
     setPaused(false);
-    loadRecords(schoolId);
+  };
+
+  const updateQty = async (book: BookRow, qty: number) => {
+    if (qty < 0) return;
+    setRecords(prev => prev.map(r => r.id === book.id ? { ...r, quantity: qty } : r));
+    await supabase.from("books").update({ quantity: qty }).eq("id", book.id);
   };
 
   const del = async (id: string) => {
@@ -298,6 +376,7 @@ function ScanPage() {
             <span className="truncate text-sm font-medium">
               {activeSchool?.name}
             </span>
+            <Badge variant="secondary" className="ml-2 font-mono">{scanCount}</Badge>
           </div>
           <Button variant="ghost" size="sm" onClick={() => signOut()}>
             <LogOut className="mr-1 h-4 w-4" />
@@ -307,6 +386,12 @@ function ScanPage() {
       </header>
 
       <section className="mb-4">
+        {lastScanned && (
+          <div className="mb-2 rounded-md bg-green-50 px-3 py-1.5 text-xs text-green-700 flex items-center justify-between">
+            <span className="truncate">✓ Last saved: {lastScanned}</span>
+            <span className="shrink-0 ml-2 text-green-600/70">{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+          </div>
+        )}
         <BarcodeScanner onDetected={handleDetected} paused={paused} />
         <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
           <span>Point camera at the barcode</span>
@@ -463,9 +548,13 @@ function ScanPage() {
                 </thead>
                 <tbody>
                   {records.map((r) => (
-                    <tr key={r.id} className="border-t">
+                    <tr 
+                      key={r.id} 
+                      className="border-t cursor-pointer hover:bg-slate-50 transition-colors"
+                      onClick={() => setDetailBook(r)}
+                    >
                       <td className="px-3 py-2">
-                        <div className="font-medium">{r.title ?? "—"}</div>
+                        <div className="font-medium text-primary">{r.title ?? "—"}</div>
                         <div className="text-xs text-muted-foreground">
                           {r.author ?? ""}
                         </div>
@@ -473,8 +562,25 @@ function ScanPage() {
                       <td className="px-3 py-2 font-mono text-xs">
                         {r.isbn ?? "—"}
                       </td>
-                      <td className="px-3 py-2">{r.quantity}</td>
-                      <td className="px-3 py-2 text-right">
+                      <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1 bg-white rounded border border-slate-200 px-1 py-0.5 w-max">
+                          <button 
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-100 disabled:opacity-50 text-slate-500" 
+                            onClick={() => updateQty(r, r.quantity - 1)}
+                            disabled={r.quantity <= 1}
+                          >
+                            −
+                          </button>
+                          <span className="w-6 text-center font-medium text-slate-700">{r.quantity}</span>
+                          <button 
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-100 text-slate-500" 
+                            onClick={() => updateQty(r, r.quantity + 1)}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -492,6 +598,29 @@ function ScanPage() {
           )}
         </CardContent>
       </Card>
+
+      <BookDetailSheet 
+        book={detailBook} 
+        onClose={() => setDetailBook(null)} 
+        onEdit={(b) => {
+          setDetailBook(null);
+          setEditTarget(b);
+        }} 
+      />
+
+      <EditBookDialog 
+        book={editTarget} 
+        onClose={() => setEditTarget(null)} 
+        onSaved={() => loadRecords(schoolId)}
+      />
+
+      <RecoveryDialog 
+        data={recoveryData} 
+        onResolved={() => {
+          setRecoveryData(null);
+          loadRecords(schoolId);
+        }} 
+      />
     </div>
   );
 }

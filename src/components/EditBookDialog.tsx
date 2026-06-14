@@ -1,0 +1,154 @@
+import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
+import { BookDetail } from "./BookDetailSheet";
+
+interface Props {
+  book: BookDetail | null;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+export function EditBookDialog({ book, onClose, onSaved }: Props) {
+  const [form, setForm] = useState<Partial<BookDetail>>({});
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (book) {
+      setForm({ ...book });
+    }
+  }, [book]);
+
+  if (!book) return null;
+
+  const save = async () => {
+    setSaving(true);
+    const { error } = await supabase
+      .from("books")
+      .update({
+        isbn: form.isbn?.trim() || null,
+        title: form.title?.trim() || null,
+        author: form.author?.trim() || null,
+        publisher: form.publisher?.trim() || null,
+        year: form.year?.trim() || null,
+        quantity: form.quantity || 1,
+        condition: form.condition,
+        notes: form.notes?.trim() || null,
+      })
+      .eq("id", book.id);
+      
+    setSaving(false);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success("Book updated");
+    onSaved();
+    onClose();
+  };
+
+  return (
+    <Dialog open={!!book} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Book</DialogTitle>
+          <DialogDescription>Update the details for this book.</DialogDescription>
+        </DialogHeader>
+        
+        <div className="grid grid-cols-2 gap-3 py-2">
+          <div className="col-span-2 space-y-1.5">
+            <Label>ISBN</Label>
+            <Input
+              value={form.isbn || ""}
+              onChange={(e) => setForm({ ...form, isbn: e.target.value })}
+            />
+          </div>
+          <div className="col-span-2 space-y-1.5">
+            <Label>Title</Label>
+            <Input
+              value={form.title || ""}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+            />
+          </div>
+          <div className="col-span-2 space-y-1.5">
+            <Label>Author(s)</Label>
+            <Input
+              value={form.author || ""}
+              onChange={(e) => setForm({ ...form, author: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Publisher</Label>
+            <Input
+              value={form.publisher || ""}
+              onChange={(e) => setForm({ ...form, publisher: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Year</Label>
+            <Input
+              value={form.year || ""}
+              onChange={(e) => setForm({ ...form, year: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Quantity</Label>
+            <Input
+              type="number"
+              min={1}
+              value={form.quantity || 1}
+              onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) || 1 })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Condition</Label>
+            <Select
+              value={form.condition || ""}
+              onValueChange={(v) => setForm({ ...form, condition: v })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Good">Good</SelectItem>
+                <SelectItem value="Fair">Fair</SelectItem>
+                <SelectItem value="Poor">Poor</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-2 space-y-1.5">
+            <Label>Notes</Label>
+            <Textarea
+              rows={2}
+              value={form.notes || ""}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={save} disabled={saving}>
+            {saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+            Save Changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
