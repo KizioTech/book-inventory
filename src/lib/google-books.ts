@@ -25,10 +25,10 @@ export async function lookupIsbn(isbn: string): Promise<BookMeta | null> {
       const info = data?.items?.[0]?.volumeInfo;
       if (info?.title) {
         return {
-          title:     info.title ?? "",
-          author:    (info.authors ?? []).join(", "),
+          title: info.title ?? "",
+          author: (info.authors ?? []).join(", "),
           publisher: info.publisher ?? "",
-          year:      (info.publishedDate ?? "").slice(0, 4),
+          year: (info.publishedDate ?? "").slice(0, 4),
         };
       }
     }
@@ -43,21 +43,25 @@ export async function lookupIsbn(isbn: string): Promise<BookMeta | null> {
     );
     if (res.ok) {
       const data = await res.json();
-      const entry = Object.values(data)[0] as any;
-      const details = entry?.details;
+      const entry = Object.values(data)[0] as Record<string, unknown>;
+      const details = entry?.details as Record<string, unknown> | undefined;
       if (details?.title) {
-        const authors: string = (details.authors ?? [])
-          .map((a: any) => a.name ?? "")
+        const authors: string = (
+          (details.authors as Record<string, unknown>[]) ?? []
+        )
+          .map((a) => (a.name as string) ?? "")
           .filter(Boolean)
           .join(", ");
-        const publisher: string =
-          (details.publishers ?? []).map((p: any) => p.name ?? p).join(", ");
-        const year: string =
-          details.publish_date
-            ? String(details.publish_date).replace(/\D/g, "").slice(0, 4)
-            : "";
+        const publisher: string = (
+          (details.publishers as Record<string, unknown>[]) ?? []
+        )
+          .map((p) => (p.name as string) ?? String(p))
+          .join(", ");
+        const year: string = details.publish_date
+          ? String(details.publish_date).replace(/\D/g, "").slice(0, 4)
+          : "";
         return {
-          title:  details.title ?? "",
+          title: (details.title as string) ?? "",
           author: authors,
           publisher,
           year,
