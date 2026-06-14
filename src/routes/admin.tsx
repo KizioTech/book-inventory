@@ -653,7 +653,7 @@ function CreateUserDialog({
         body: {
           full_name: fullName,
           email,
-          password,
+          password: password || undefined,   // omit if blank → invite flow
           role,
           school_ids: role === "clerk" ? selected : [],
         },
@@ -683,7 +683,7 @@ function CreateUserDialog({
       setError(data.error);
       return;
     }
-    toast.success(`${fullName} added successfully.`);
+    toast.success(`${fullName} added. They'll receive an email to set their password.`);
     onOpenChange(false);
     onCreated();
   };
@@ -694,7 +694,7 @@ function CreateUserDialog({
         <DialogHeader>
           <DialogTitle>Add user</DialogTitle>
           <DialogDescription>
-            Create a new account and assign a role and schools.
+            The user will receive an email invitation to set their own password.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3">
@@ -726,16 +726,14 @@ function CreateUserDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>
-              Password <span className="text-red-500">*</span>
-            </Label>
+            <Label>Temporary password <span className="text-slate-400 font-normal">(optional)</span></Label>
             <div className="relative">
               <Input
                 type={showPwd ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                minLength={6}
-                required
+                placeholder="Leave blank to send invite email"
+                minLength={password ? 6 : undefined}
               />
               <button
                 type="button"
@@ -746,7 +744,10 @@ function CreateUserDialog({
                 {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            <p className="text-xs text-slate-500">Min. 6 characters</p>
+            <p className="text-xs text-slate-400">
+              If left blank, the user receives an email to set their own password.
+              {password && " If set, they can log in immediately but should change it."}
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label>
@@ -815,7 +816,7 @@ function CreateUserDialog({
             </Button>
             <Button type="submit" disabled={creating}>
               {creating && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-              Create
+              Create & Send Invite
             </Button>
           </DialogFooter>
         </form>

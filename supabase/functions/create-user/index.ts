@@ -16,7 +16,7 @@ interface JsonResponse {
 interface CreateUserRequest {
   full_name: string;
   email: string;
-  password: string;
+  password?: string;   // omitted → invite email flow; provided → immediate login
   role: "admin" | "clerk";
   school_ids?: string[];
 }
@@ -89,25 +89,48 @@ async function validateStaffAccess(
 async function createAuthUser(
   supabaseAdmin: SupabaseClient,
   email: string,
-  password: string,
+  password: string | undefined,
   full_name: string,
+  siteUrl: string,
 ): Promise<{ userId: string | null; error: string | null }> {
-  const { data: authData, error: authError } =
-    await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name },
+  // Use inviteUserByEmail so Supabase sends a "set your password" email.
+  // The user lands on /reset-password and sets their own password before
+  // they can log in — they never use the temporary password we pass here.
+  const { data: inviteData, error: inviteError } =
+    await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+      redirectTo: `${siteUrl}/reset-password`,
+      data: { full_name },
     });
 
-  if (authError || !authData?.user) {
-    return {
-      userId: null,
-      error: friendly(authError?.message ?? "Failed to create user"),
-    };
+  if (inviteError || !inviteData?.user) {
+    // Fall back to createUser if invite fails (e.g. email not configured)
+    if (!password) {
+      // No password and no invite — cannot create account
+      return {
+        userId: null,
+        error: friendly(inviteError?.message ?? "Failed to send invite email"),
+      };
+    }
+
+    const { data: authData, error: authError } =
+      await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name },
+      });
+
+    if (authError || !authData?.user) {
+      return {
+        userId: null,
+        error: friendly(authError?.message ?? "Failed to create user"),
+      };
+    }
+
+    return { userId: authData.user.id, error: null };
   }
 
-  return { userId: authData.user.id, error: null };
+  return { userId: inviteData.user.id, error: null };
 }
 
 async function createProfile(
@@ -175,10 +198,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   try {
-    if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+    if (req.method !== "POST")
+      return json({ error: "Method not allowed" }, 405);
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const SITE_URL = Deno.env.get("SITE_URL") ?? "https://your-app.com";
+
     if (!SUPABASE_URL || !SERVICE_KEY) {
       console.error("Missing Supabase configuration");
       return json({ error: "Server is missing Supabase configuration." }, 500);
@@ -190,11 +216,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // Auth
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return json({ error: "Missing authorization header" }, 401);
+    if (!authHeader)
+      return json({ error: "Missing authorization header" }, 401);
 
     const token = authHeader.replace("Bearer ", "");
     const { isValid, roles } = await validateStaffAccess(supabaseAdmin, token);
-    if (!isValid) return json({ error: "Invalid token or insufficient permissions" }, 401);
+    if (!isValid)
+      return json({ error: "Invalid token or insufficient permissions" }, 401);
 
     // Parse body
     let body: CreateUserRequest;
@@ -206,8 +234,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const { full_name, email, password, role, school_ids } = body;
 
-    if (!full_name || !email || !password || !role)
-      return json({ error: "full_name, email, password, and role are required" }, 400);
+    if (!full_name || !email || !role)
+      return json({ error: "full_name, email, and role are required" }, 400);
 
     if (!["admin", "clerk"].includes(role))
       return json({ error: "role must be admin or clerk" }, 400);
@@ -215,16 +243,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (role === "admin" && !roles.includes("super_admin"))
       return json({ error: "Only a Super Admin can create Admins." }, 403);
 
-    // 1. Create auth user
+    // 1. Create auth user via invite (sends "set password" email)
     const { userId, error: authError } = await createAuthUser(
-      supabaseAdmin, email, password, full_name,
+      supabaseAdmin,
+      email,
+      password ?? "",
+      full_name,
+      SITE_URL,
     );
     if (authError || !userId)
       return json({ error: authError ?? "Failed to create user" }, 400);
 
     // 2. Create profile
     const { success: profileOk, error: profileError } = await createProfile(
-      supabaseAdmin, userId, full_name, email,
+      supabaseAdmin,
+      userId,
+      full_name,
+      email,
     );
     if (!profileOk) {
       await cleanupFailedUser(supabaseAdmin, userId);
@@ -233,7 +268,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // 3. Set role
     const { success: roleOk, error: roleError } = await setUserRole(
-      supabaseAdmin, userId, role,
+      supabaseAdmin,
+      userId,
+      role,
     );
     if (!roleOk) {
       await cleanupFailedUser(supabaseAdmin, userId);
@@ -241,14 +278,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // 4. Assign schools (clerks only)
-    if (role === "clerk" && Array.isArray(school_ids) && school_ids.length > 0) {
-      const { success: assignOk, error: assignError } = await assignSchoolsToClerk(
-        supabaseAdmin, userId, school_ids,
-      );
+    if (
+      role === "clerk" &&
+      Array.isArray(school_ids) &&
+      school_ids.length > 0
+    ) {
+      const { success: assignOk, error: assignError } =
+        await assignSchoolsToClerk(supabaseAdmin, userId, school_ids);
       if (!assignOk) {
         console.error("Failed to assign schools:", assignError);
         return json(
-          { error: "User created but school assignment failed. Please assign schools manually." },
+          {
+            error:
+              "User created but school assignment failed. Please assign schools manually.",
+          },
           500,
         );
       }
