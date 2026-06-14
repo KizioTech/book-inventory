@@ -1,6 +1,6 @@
 import { useState } from "react";
+import type { ElementType } from "react";
 import {
-  BookOpen,
   School as SchoolIcon,
   Users,
   BarChart2,
