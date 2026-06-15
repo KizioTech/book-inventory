@@ -1655,37 +1655,56 @@ function MetadataTab() {
     const idx = (name: string) => header.indexOf(name);
 
     const rows = lines.slice(1).map((line) => {
-      // naive CSV split (sufficient for this data; no embedded newlines)
       const cols = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
       const isbn = cols[idx("isbn")]?.replace(/[^0-9Xx]/g, "") || null;
       return {
         isbn:      isbn || null,
-        title:     cols[idx("book_title")]  || "",
-        author:    cols[idx("author")]      || null,
-        publisher: cols[idx("publisher")]   || null,
+        title:     cols[idx("book_title")]     || "",
+        author:    cols[idx("author")]         || null,
+        publisher: cols[idx("publisher")]      || null,
         year:      cols[idx("year_published")] || null,
         category:  cols[idx("category_name")] || null,
       };
     }).filter((r) => r.title !== "");
 
+    // Fetch all existing ISBNs so we can skip duplicates client-side
+    // (avoids the partial-index upsert conflict issue with PostgREST)
+    const { data: existingRows } = await supabase
+      .from("book_metadata")
+      .select("isbn")
+      .not("isbn", "is", null);
+
+    const existingIsbns = new Set(
+      (existingRows ?? []).map((r) => r.isbn).filter(Boolean)
+    );
+
+    const toInsert = rows.filter(
+      (r) => !r.isbn || !existingIsbns.has(r.isbn)
+    );
+
     let inserted = 0;
-    const skipped = 0;
-    // Upsert in batches of 50
-    for (let i = 0; i < rows.length; i += 50) {
-      const batch = rows.slice(i, i + 50);
+    let failed = 0;
+    for (let i = 0; i < toInsert.length; i += 50) {
+      const batch = toInsert.slice(i, i + 50);
       const { error } = await supabase
         .from("book_metadata")
-        .upsert(batch, { onConflict: "isbn", ignoreDuplicates: true });
+        .insert(batch);
       if (error) {
+        console.error("Import batch error:", error);
         toast.error(`Batch ${Math.floor(i / 50) + 1} failed: ${error.message}`);
+        failed += batch.length;
       } else {
         inserted += batch.length;
       }
     }
 
+    const skipped = rows.length - toInsert.length;
     setImporting(false);
     setImportStats({ inserted, skipped });
-    toast.success(`Import complete — ${inserted} rows processed`);
+    const msg = skipped > 0
+      ? `Import complete — ${inserted} added, ${skipped} skipped (duplicate ISBNs)`
+      : `Import complete — ${inserted} rows added`;
+    if (inserted > 0) toast.success(msg); else toast.error(`Import failed — ${failed} rows rejected`);
     e.target.value = "";
   };
 
