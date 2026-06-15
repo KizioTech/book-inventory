@@ -31,6 +31,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -185,9 +195,14 @@ function SchoolsTab() {
   const [editing, setEditing] = useState<School | null>(null);
 
   const saveMutation = useMutation({
-    mutationFn: async (payload: Omit<School, "id" | "created_at" | "active">) => {
+    mutationFn: async (
+      payload: Omit<School, "id" | "created_at" | "active">,
+    ) => {
       if (editing) {
-        const { error } = await supabase.from("schools").update(payload).eq("id", editing.id);
+        const { error } = await supabase
+          .from("schools")
+          .update(payload)
+          .eq("id", editing.id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from("schools").insert(payload);
@@ -218,17 +233,41 @@ function SchoolsTab() {
 
   const toggleMutation = useMutation({
     mutationFn: async (s: School) => {
-      const { error } = await supabase.from("schools").update({ active: !s.active }).eq("id", s.id);
+      const { error } = await supabase
+        .from("schools")
+        .update({ active: !s.active })
+        .eq("id", s.id);
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["schools"] }),
     onError: (err) => toast.error(err.message),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("schools").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("School deleted");
+      queryClient.invalidateQueries({ queryKey: ["schools"] });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  const confirmDelete = () => {
+    if (deleteTarget) {
+      deleteMutation.mutate(deleteTarget);
+      setDeleteTarget(null);
+    }
+  };
+
   const counts: Record<string, number> = {};
   const clerkCounts: Record<string, number> = {};
   const lastEntries: Record<string, string> = {};
-  
+
   stats.forEach((r) => {
     counts[r.school_id] = Number(r.total_books) || 0;
     clerkCounts[r.school_id] = Number(r.clerk_count) || 0;
@@ -236,7 +275,9 @@ function SchoolsTab() {
   });
 
   if (loadingSchools || loadingStats) {
-    return <div className="py-10 text-center text-slate-500">Loading schools...</div>;
+    return (
+      <div className="py-10 text-center text-slate-500">Loading schools...</div>
+    );
   }
 
   return (
@@ -299,8 +340,22 @@ function SchoolsTab() {
                 >
                   Edit
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => toggleMutation.mutate(s)} disabled={toggleMutation.isPending}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => toggleMutation.mutate(s)}
+                  disabled={toggleMutation.isPending}
+                >
                   {s.active ? "Pause" : "Unpause"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  onClick={() => setDeleteTarget(s.id)}
+                  disabled={deleteMutation.isPending}
+                >
+                  Delete
                 </Button>
               </div>
             </div>
@@ -324,7 +379,9 @@ function SchoolsTab() {
           <DialogHeader>
             <DialogTitle>{editing ? "Edit school" : "Add school"}</DialogTitle>
             <DialogDescription>
-              {editing ? "Update the school's details below." : "Fill in the details to add a new school."}
+              {editing
+                ? "Update the school's details below."
+                : "Fill in the details to add a new school."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={save} className="space-y-3">
@@ -353,17 +410,55 @@ function SchoolsTab() {
               <Textarea name="notes" defaultValue={editing?.notes ?? ""} />
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+              >
                 Cancel
               </Button>
               <Button type="submit" disabled={saveMutation.isPending}>
-                {saveMutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                {saveMutation.isPending && (
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                )}
                 {editing ? "Save" : "Create"}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => {
+          if (!o) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete school?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this school and all associated books
+              and assignments. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteMutation.isPending && (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              )}
+              Delete Permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -395,10 +490,20 @@ function UsersTab() {
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
 
   const saveTargetMutation = useMutation({
-    mutationFn: async ({ uid, newRole, selected }: { uid: string; newRole: "clerk" | "admin" | "super_admin"; selected: string[] }) => {
+    mutationFn: async ({
+      uid,
+      newRole,
+      selected,
+    }: {
+      uid: string;
+      newRole: "clerk" | "admin" | "super_admin";
+      selected: string[];
+    }) => {
       if (myRole === "super_admin") {
         await supabase.from("user_roles").delete().eq("user_id", uid);
-        await supabase.from("user_roles").insert({ user_id: uid, role: newRole });
+        await supabase
+          .from("user_roles")
+          .insert({ user_id: uid, role: newRole });
       }
       await supabase.from("clerk_schools").delete().eq("clerk_id", uid);
       if (selected.length) {
@@ -417,7 +522,10 @@ function UsersTab() {
 
   const toggleMutation = useMutation({
     mutationFn: async (u: Profile) => {
-      await supabase.from("profiles").update({ active: !u.active }).eq("id", u.id);
+      await supabase
+        .from("profiles")
+        .update({ active: !u.active })
+        .eq("id", u.id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["profiles"] }),
   });
@@ -439,7 +547,10 @@ function UsersTab() {
     onError: (err) => toast.error(err.message || "Failed to delete user"),
   });
 
-  const saveTarget = (newRole: "clerk" | "admin" | "super_admin", selected: string[]) => {
+  const saveTarget = (
+    newRole: "clerk" | "admin" | "super_admin",
+    selected: string[],
+  ) => {
     if (!target) return;
     saveTargetMutation.mutate({ uid: target.id, newRole, selected });
   };
@@ -467,7 +578,9 @@ function UsersTab() {
   const myId = user?.id;
 
   if (l1 || l2 || l3 || l4) {
-    return <div className="py-10 text-center text-slate-500">Loading users...</div>;
+    return (
+      <div className="py-10 text-center text-slate-500">Loading users...</div>
+    );
   }
 
   const activeCount = users.filter((u) => u.active).length;
@@ -526,7 +639,9 @@ function UsersTab() {
                       </span>
                     )}
                   </div>
-                  <div className="truncate text-sm text-slate-500">{u.email}</div>
+                  <div className="truncate text-sm text-slate-500">
+                    {u.email}
+                  </div>
                   <div className="mt-1 text-xs text-slate-500">
                     {rankLabel === "Clerk"
                       ? userSchools.length
@@ -549,7 +664,11 @@ function UsersTab() {
                   >
                     Edit
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => toggleActive(u)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => toggleActive(u)}
+                  >
                     {u.active ? "Disable" : "Enable"}
                   </Button>
                   {/* Don't allow deleting yourself or super admins */}
@@ -598,11 +717,18 @@ function UsersTab() {
         onOpenChange={setCreateOpen}
         schools={schools}
         canCreateAdmin={myRole === "super_admin"}
-        onCreated={() => queryClient.invalidateQueries({ queryKey: ["profiles"] })}
+        onCreated={() =>
+          queryClient.invalidateQueries({ queryKey: ["profiles"] })
+        }
       />
 
       {/* ── Delete confirmation dialog ─────────────────────────────── */}
-      <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => {
+          if (!o) setDeleteTarget(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
@@ -613,11 +739,16 @@ function UsersTab() {
               <span className="font-semibold text-slate-900">
                 {deleteTarget?.full_name ?? deleteTarget?.email}
               </span>
-              's account, role, and all school assignments. This action cannot be undone.
+              's account, role, and all school assignments. This action cannot
+              be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleteMutation.isPending}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleteMutation.isPending}
+            >
               Cancel
             </Button>
             <Button
@@ -626,7 +757,9 @@ function UsersTab() {
               disabled={deleteMutation.isPending}
               className="bg-red-600 hover:bg-red-700"
             >
-              {deleteMutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              {deleteMutation.isPending && (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              )}
               Delete permanently
             </Button>
           </DialogFooter>
@@ -674,18 +807,16 @@ function CreateUserDialog({
     e.preventDefault();
     setError(null);
     setCreating(true);
-    const { data, error: invokeErr } = await supabase.functions.invoke<CreateUserResponse>(
-      "create-user",
-      {
+    const { data, error: invokeErr } =
+      await supabase.functions.invoke<CreateUserResponse>("create-user", {
         body: {
           full_name: fullName,
           email,
-          password: password || undefined,   // omit if blank → invite flow
+          password: password || undefined, // omit if blank → invite flow
           role,
           school_ids: role === "clerk" ? selected : [],
         },
-      },
-    );
+      });
     setCreating(false);
 
     if (invokeErr) {
@@ -693,10 +824,16 @@ function CreateUserDialog({
       const errWithCtx = invokeErr as FunctionInvokeError;
       if (errWithCtx.context?.body) {
         try {
-          const body = typeof errWithCtx.context.body === "string" 
-            ? JSON.parse(errWithCtx.context.body) 
-            : errWithCtx.context.body;
-          if (body && typeof body === "object" && "error" in body && body.error) {
+          const body =
+            typeof errWithCtx.context.body === "string"
+              ? JSON.parse(errWithCtx.context.body)
+              : errWithCtx.context.body;
+          if (
+            body &&
+            typeof body === "object" &&
+            "error" in body &&
+            body.error
+          ) {
             msg = String(body.error);
           }
         } catch {
@@ -710,7 +847,9 @@ function CreateUserDialog({
       setError(data.error);
       return;
     }
-    toast.success(`${fullName} added. They'll receive an email to set their password.`);
+    toast.success(
+      `${fullName} added. They'll receive an email to set their password.`,
+    );
     onOpenChange(false);
     onCreated();
   };
@@ -753,7 +892,10 @@ function CreateUserDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Temporary password <span className="text-slate-400 font-normal">(optional)</span></Label>
+            <Label>
+              Temporary password{" "}
+              <span className="text-slate-400 font-normal">(optional)</span>
+            </Label>
             <div className="relative">
               <Input
                 type={showPwd ? "text" : "password"}
@@ -772,8 +914,10 @@ function CreateUserDialog({
               </button>
             </div>
             <p className="text-xs text-slate-400">
-              If left blank, the user receives an email to set their own password.
-              {password && " If set, they can log in immediately but should change it."}
+              If left blank, the user receives an email to set their own
+              password.
+              {password &&
+                " If set, they can log in immediately but should change it."}
             </p>
           </div>
           <div className="space-y-1.5">
@@ -932,14 +1076,20 @@ function RecordsTab() {
   const { data: schools = [], isLoading: l1 } = useSchoolsQuery();
   const { data: profiles = [], isLoading: l2 } = useProfilesQuery();
   const { data: stats = [], isLoading: l3 } = useSchoolStatsQuery();
-  const { data: todayBooksCount = 0, isLoading: l4 } = useBooksCountQuery({ range: "today" });
+  const { data: todayBooksCount = 0, isLoading: l4 } = useBooksCountQuery({
+    range: "today",
+  });
 
   const filters = {
     schoolId: schoolFilter === "all" ? undefined : schoolFilter,
     clerkId: clerkFilter === "all" ? undefined : clerkFilter,
     condition: conditionFilter === "all" ? undefined : conditionFilter,
   };
-  const { data: booksData, isLoading: l5 } = useBooksQuery(filters, page, PAGE_SIZE);
+  const { data: booksData, isLoading: l5 } = useBooksQuery(
+    filters,
+    page,
+    PAGE_SIZE,
+  );
   const pageRows = booksData?.data ?? [];
   const totalCount = booksData?.count ?? 0;
 
@@ -960,9 +1110,13 @@ function RecordsTab() {
     onError: (err) => toast.error(err.message),
   });
 
-  const del = (id: string) => {
-    if (!window.confirm("Delete this record?")) return;
-    deleteMutation.mutate(id);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  const confirmDelete = () => {
+    if (deleteTarget) {
+      deleteMutation.mutate(deleteTarget);
+      setDeleteTarget(null);
+    }
   };
 
   const byId = new Map(stats.map((r) => [r.school_id, r]));
@@ -997,13 +1151,17 @@ function RecordsTab() {
     "—";
 
   if (l1 || l2 || l3 || l4 || (l5 && pageRows.length === 0)) {
-    return <div className="py-10 text-center text-slate-500">Loading records...</div>;
+    return (
+      <div className="py-10 text-center text-slate-500">Loading records...</div>
+    );
   }
-
 
   return (
     <div className="space-y-6">
-      <SectionHeader title="Records" subtitle="Live activity across all schools" />
+      <SectionHeader
+        title="Records"
+        subtitle="Live activity across all schools"
+      />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <SummaryCard
@@ -1064,7 +1222,10 @@ function RecordsTab() {
               ))}
               {perSchool.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                  <td
+                    colSpan={5}
+                    className="px-4 py-6 text-center text-slate-500"
+                  >
                     No schools yet.
                   </td>
                 </tr>
@@ -1158,8 +1319,10 @@ function RecordsTab() {
                     </td>
                     <td className="px-4 py-2 text-right">
                       <button
-                        onClick={() => del(b.id)}
-                        disabled={deleteMutation.isPending}
+                        onClick={() => setDeleteTarget(b.id)}
+                        disabled={
+                          deleteMutation.isPending && deleteTarget === b.id
+                        }
                         aria-label="Delete"
                         className="rounded p-1 hover:bg-red-50 disabled:opacity-50"
                       >
@@ -1173,7 +1336,10 @@ function RecordsTab() {
                 ))}
                 {pageRows.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
+                    <td
+                      colSpan={8}
+                      className="px-4 py-6 text-center text-slate-500"
+                    >
                       No records match these filters.
                     </td>
                   </tr>
@@ -1214,6 +1380,32 @@ function RecordsTab() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => {
+          if (!o) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this record? This action cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1271,7 +1463,9 @@ function ExportTab() {
     setBusy(true);
     const base = supabase
       .from("books")
-      .select("title, author, isbn, publisher, year, category, quantity, condition, shelf_location, notes")
+      .select(
+        "title, author, isbn, publisher, year, category, quantity, condition, shelf_location, notes",
+      )
       .order("created_at", { ascending: false });
 
     const { data, error } = await applyFilters(base);
@@ -1280,25 +1474,33 @@ function ExportTab() {
     if (error) return toast.error(error.message);
 
     const records = (data ?? []) as unknown as ExportBookData[];
-    if (records.length === 0) return toast.error("No records match the selected filters.");
+    if (records.length === 0)
+      return toast.error("No records match the selected filters.");
 
     const rows = records.map((b) => ({
-      book_title:    b.title         ?? "",
-      author:        b.author        ?? "",
-      isbn:          b.isbn          ?? "",
-      publisher:     b.publisher     ?? "",
-      year_published: b.year         ?? "",
-      category_name: b.category      ?? "",
-      book_copies:   b.quantity      ?? 0,
-      status:        b.condition     ?? "",
+      book_title: b.title ?? "",
+      author: b.author ?? "",
+      isbn: b.isbn ?? "",
+      publisher: b.publisher ?? "",
+      year_published: b.year ?? "",
+      category_name: b.category ?? "",
+      book_copies: b.quantity ?? 0,
+      status: b.condition ?? "",
       shelf_location: b.shelf_location ?? "",
-      description:   b.notes         ?? "",
+      description: b.notes ?? "",
     }));
 
     const columns: (keyof (typeof rows)[0])[] = [
-      "book_title", "author", "isbn", "publisher",
-      "year_published", "category_name", "book_copies",
-      "status", "shelf_location", "description",
+      "book_title",
+      "author",
+      "isbn",
+      "publisher",
+      "year_published",
+      "category_name",
+      "book_copies",
+      "status",
+      "shelf_location",
+      "description",
     ];
 
     const filename = `book-inventory-${schoolId === "all" ? "all-schools" : schoolId}-${Date.now()}.csv`;
@@ -1308,9 +1510,9 @@ function ExportTab() {
   };
 
   const rangeLabel: Record<typeof range, string> = {
-    all:   "All time",
+    all: "All time",
     today: "Today",
-    week:  "This week",
+    week: "This week",
     month: "This month",
   };
 
@@ -1322,7 +1524,9 @@ function ExportTab() {
       />
 
       <div className="max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
-        <p className="text-sm font-semibold text-slate-700">Filter your export</p>
+        <p className="text-sm font-semibold text-slate-700">
+          Filter your export
+        </p>
 
         {/* School filter */}
         <div className="space-y-1.5">
@@ -1345,7 +1549,10 @@ function ExportTab() {
         {/* Date range filter */}
         <div className="space-y-1.5">
           <Label>Date range</Label>
-          <Select value={range} onValueChange={(v) => setRange(v as typeof range)}>
+          <Select
+            value={range}
+            onValueChange={(v) => setRange(v as typeof range)}
+          >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -1361,22 +1568,38 @@ function ExportTab() {
 
         {/* Estimate + action */}
         <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          {l2 ? "Loading estimate..." : estimate === 0
-            ? "No records match the current filters."
-            : <>Ready to export <span className="font-semibold text-slate-900">{estimate.toLocaleString()}</span> row{estimate !== 1 ? "s" : ""}.</>
-          }
+          {l2 ? (
+            "Loading estimate..."
+          ) : estimate === 0 ? (
+            "No records match the current filters."
+          ) : (
+            <>
+              Ready to export{" "}
+              <span className="font-semibold text-slate-900">
+                {estimate.toLocaleString()}
+              </span>{" "}
+              row{estimate !== 1 ? "s" : ""}.
+            </>
+          )}
         </div>
 
-        <Button onClick={exportAll} disabled={busy || estimate === 0} className="w-full">
-          {busy
-            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            : <Download className="mr-2 h-4 w-4" />
-          }
+        <Button
+          onClick={exportAll}
+          disabled={busy || estimate === 0}
+          className="w-full"
+        >
+          {busy ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
           {busy ? "Exporting…" : "Download CSV"}
         </Button>
 
         {lastExport && (
-          <p className="text-xs text-slate-400 text-center">Last export: {lastExport}</p>
+          <p className="text-xs text-slate-400 text-center">
+            Last export: {lastExport}
+          </p>
         )}
       </div>
     </div>
