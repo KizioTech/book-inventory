@@ -19,7 +19,7 @@ import { BookDetail } from "./BookDetailSheet";
 interface Props {
   book: BookDetail | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (book: BookDetail) => void;
 }
 
 export function EditBookDialog({ book, onClose, onSaved }: Props) {
@@ -36,18 +36,20 @@ export function EditBookDialog({ book, onClose, onSaved }: Props) {
 
   const save = async () => {
     setSaving(true);
+    const updatedFields = {
+      isbn: form.isbn?.trim() || null,
+      title: form.title?.trim() || null,
+      author: form.author?.trim() || null,
+      publisher: form.publisher?.trim() || null,
+      year: form.year?.trim() || null,
+      quantity: Number(form.quantity) || 1,
+      condition: form.condition,
+      notes: form.notes?.trim() || null,
+    };
+
     const { error } = await supabase
       .from("books")
-      .update({
-        isbn: form.isbn?.trim() || null,
-        title: form.title?.trim() || null,
-        author: form.author?.trim() || null,
-        publisher: form.publisher?.trim() || null,
-        year: form.year?.trim() || null,
-        quantity: form.quantity || 1,
-        condition: form.condition,
-        notes: form.notes?.trim() || null,
-      })
+      .update(updatedFields)
       .eq("id", book.id);
       
     setSaving(false);
@@ -58,7 +60,7 @@ export function EditBookDialog({ book, onClose, onSaved }: Props) {
     }
 
     toast.success("Book updated");
-    onSaved();
+    onSaved({ ...book, ...updatedFields } as BookDetail);
     onClose();
   };
 
@@ -111,8 +113,8 @@ export function EditBookDialog({ book, onClose, onSaved }: Props) {
             <Input
               type="number"
               min={1}
-              value={form.quantity || 1}
-              onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) || 1 })}
+              value={form.quantity === undefined ? "" : form.quantity}
+              onChange={(e) => setForm({ ...form, quantity: e.target.value === "" ? ("" as unknown as number) : Number(e.target.value) })}
             />
           </div>
           <div className="space-y-1.5">

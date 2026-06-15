@@ -73,6 +73,7 @@ function ScanPage() {
   // Metadata search
   const [titleSuggestions, setTitleSuggestions] = useState<BookMeta[]>([]);
   const titleDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Alert dialogs
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -185,11 +186,22 @@ function ScanPage() {
     setForm((f) => ({ ...f, title: value }));
     clearTimeout(titleDebounce.current);
     if (value.length < 2) { setTitleSuggestions([]); return; }
+
     titleDebounce.current = setTimeout(async () => {
-      const results = await searchMetadataByTitle(value);
-      setTitleSuggestions(results);
+      abortRef.current?.abort();
+      abortRef.current = new AbortController();
+      try {
+        const results = await searchMetadataByTitle(value, 6, abortRef.current.signal);
+        setTitleSuggestions(results);
+      } catch (err) {
+        if (err instanceof Error && err.name !== 'AbortError') throw err;
+      }
     }, 300);
   };
+
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
 
   const save = async (forceDuplicate = false) => {
     if (!user || !schoolId) return;
@@ -207,7 +219,7 @@ function ScanPage() {
       author: form.author?.trim() || null,
       publisher: form.publisher?.trim() || null,
       year: form.year?.trim() || null,
-      quantity: form.quantity,
+      quantity: Number(form.quantity) || 1,
       condition: form.condition,
       notes: form.notes?.trim() || null,
       school_id: schoolId,
@@ -259,13 +271,13 @@ function ScanPage() {
               .maybeSingle();
             if (existing) return; // Already known — nothing to do
           }
-          await supabase.from("book_metadata").insert({
+          await supabase.from("book_metadata").upsert({
             isbn:      payload.isbn,
             title:     payload.title || "",
             author:    payload.author,
             publisher: payload.publisher,
             year:      payload.year,
-          });
+          }, { onConflict: "isbn", ignoreDuplicates: true });
         } catch {
           // Silently ignore — metadata contribution is best-effort
         }
@@ -533,7 +545,7 @@ function ScanPage() {
                 min={1}
                 value={form.quantity}
                 onChange={(e) =>
-                  setForm({ ...form, quantity: Number(e.target.value) || 1 })
+                  setForm({ ...form, quantity: e.target.value === "" ? ("" as unknown as number) : Number(e.target.value) })
                 }
               />
             </div>
@@ -668,7 +680,7 @@ function ScanPage() {
         <EditBookDialog
           book={editTarget}
           onClose={() => setEditTarget(null)}
-          onSaved={() => loadRecords(schoolId)}
+          onSaved={(updatedBook) => setRecords(prev => prev.map(r => r.id === updatedBook.id ? (updatedBook as unknown as BookRow) : r))}
         />
       )}
 
@@ -707,7 +719,6 @@ function ScanPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                const p = fuzzyWarning;
                 setFuzzyWarning(null);
                 save(true);
               }}

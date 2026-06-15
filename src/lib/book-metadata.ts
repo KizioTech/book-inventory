@@ -41,15 +41,22 @@ export async function lookupMetadataByIsbn(
  */
 export async function searchMetadataByTitle(
   query: string,
-  limit = 6
+  limit = 6,
+  signal?: AbortSignal
 ): Promise<BookMeta[]> {
   if (query.trim().length < 2) return [];
 
-  const { data } = await supabase
+  let request = supabase
     .from("book_metadata")
     .select("title, author, publisher, year, category")
     .ilike("title", `%${query.trim()}%`)
     .limit(limit);
+
+  if (signal) {
+    request = request.abortSignal(signal);
+  }
+
+  const { data } = await request;
 
   return (data ?? []).map((d) => ({
     title:     d.title     ?? "",

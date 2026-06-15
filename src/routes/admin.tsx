@@ -1612,10 +1612,9 @@ function MetadataTab() {
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<BookMeta[]>([]);
   const [importing, setImporting] = useState(false);
-  const [importStats, setImportStats] = useState<{
-    inserted: number; skipped: number;
-  } | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
   const [count, setCount] = useState<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Load total count on mount
   useEffect(() => {
@@ -1623,7 +1622,7 @@ function MetadataTab() {
       .from("book_metadata")
       .select("id", { count: "exact", head: true })
       .then(({ count }) => setCount(count ?? 0));
-  }, [importStats]);
+  }, [progress]);
 
   // Debounced search
   const searchRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -1646,66 +1645,43 @@ function MetadataTab() {
     const file = e.target.files?.[0];
     if (!file) return;
     setImporting(true);
-    setImportStats(null);
+    setProgress(0);
 
-    const text = await file.text();
-    const lines = text.trim().split("\n");
-    const header = lines[0].split(",").map((h) => h.trim().replace(/"/g, ""));
+    abortRef.current = new AbortController();
+    const worker = new Worker(new URL('./metadataWorker.ts', import.meta.url), { type: 'module' });
 
-    const idx = (name: string) => header.indexOf(name);
-
-    const rows = lines.slice(1).map((line) => {
-      const cols = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
-      const isbn = cols[idx("isbn")]?.replace(/[^0-9Xx]/g, "") || null;
-      return {
-        isbn:      isbn || null,
-        title:     cols[idx("book_title")]     || "",
-        author:    cols[idx("author")]         || null,
-        publisher: cols[idx("publisher")]      || null,
-        year:      cols[idx("year_published")] || null,
-        category:  cols[idx("category_name")] || null,
-      };
-    }).filter((r) => r.title !== "");
-
-    // Fetch all existing ISBNs so we can skip duplicates client-side
-    // (avoids the partial-index upsert conflict issue with PostgREST)
-    const { data: existingRows } = await supabase
-      .from("book_metadata")
-      .select("isbn")
-      .not("isbn", "is", null);
-
-    const existingIsbns = new Set(
-      (existingRows ?? []).map((r) => r.isbn).filter(Boolean)
-    );
-
-    const toInsert = rows.filter(
-      (r) => !r.isbn || !existingIsbns.has(r.isbn)
-    );
-
-    let inserted = 0;
-    let failed = 0;
-    for (let i = 0; i < toInsert.length; i += 50) {
-      const batch = toInsert.slice(i, i + 50);
-      const { error } = await supabase
-        .from("book_metadata")
-        .insert(batch);
-      if (error) {
-        console.error("Import batch error:", error);
-        toast.error(`Batch ${Math.floor(i / 50) + 1} failed: ${error.message}`);
-        failed += batch.length;
-      } else {
-        inserted += batch.length;
+    worker.onmessage = async (ev) => {
+      if (abortRef.current?.signal.aborted) {
+        worker.terminate();
+        return;
       }
-    }
 
-    const skipped = rows.length - toInsert.length;
+      if (ev.data.type === 'batch') {
+        const { error } = await supabase.from('book_metadata').upsert(ev.data.batch, { onConflict: 'isbn', ignoreDuplicates: true });
+        if (error) console.error("Batch error:", error);
+        setProgress(Math.round(ev.data.progress * 100));
+      } else if (ev.data.type === 'done') {
+        setProgress(100);
+        setImporting(false);
+        worker.terminate();
+        toast.success(`Import complete! Processed ${ev.data.total} rows.`);
+        e.target.value = "";
+      } else if (ev.data.type === 'error') {
+        setImporting(false);
+        worker.terminate();
+        toast.error(`Import error: ${ev.data.error}`);
+        e.target.value = "";
+      }
+    };
+
+    worker.postMessage({ file, batchSize: 50 });
+  };
+
+  const cancelImport = () => {
+    abortRef.current?.abort();
     setImporting(false);
-    setImportStats({ inserted, skipped });
-    const msg = skipped > 0
-      ? `Import complete — ${inserted} added, ${skipped} skipped (duplicate ISBNs)`
-      : `Import complete — ${inserted} rows added`;
-    if (inserted > 0) toast.success(msg); else toast.error(`Import failed — ${failed} rows rejected`);
-    e.target.value = "";
+    setProgress(null);
+    toast.info("Import cancelled");
   };
 
   return (
@@ -1729,25 +1705,32 @@ function MetadataTab() {
           </code>
           . Existing ISBN matches are skipped.
         </p>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <Button asChild variant="outline" disabled={importing}>
-            <span>
-              {importing && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-              {importing ? "Importing…" : "Choose CSV file"}
-            </span>
-          </Button>
-          <input
-            type="file"
-            accept=".csv"
-            className="sr-only"
-            onChange={handleImport}
-            disabled={importing}
-          />
-        </label>
-        {importStats && (
-          <p className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
-            ✓ {importStats.inserted} rows imported successfully.
-          </p>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <Button asChild variant="outline" disabled={importing}>
+              <span>
+                {importing && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                {importing ? "Importing…" : "Choose CSV file"}
+              </span>
+            </Button>
+            <input
+              type="file"
+              accept=".csv"
+              className="sr-only"
+              onChange={handleImport}
+              disabled={importing}
+            />
+          </label>
+          {importing && (
+            <Button variant="ghost" onClick={cancelImport} className="text-red-500 hover:text-red-600 hover:bg-red-50">
+              Cancel
+            </Button>
+          )}
+        </div>
+        {progress !== null && importing && (
+          <div className="w-full bg-slate-100 rounded-full h-2 mt-2 overflow-hidden">
+            <div className="bg-blue-600 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+          </div>
         )}
       </div>
 

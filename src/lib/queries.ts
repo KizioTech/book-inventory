@@ -128,8 +128,9 @@ export function useAssignedSchoolsQuery(userId: string | undefined, role: string
       if (role === "clerk") {
         const { data, error } = await supabase
           .from("clerk_schools")
-          .select("school_id, schools(id, name, active)")
-          .eq("clerk_id", userId);
+          .select("school_id, schools!inner(id, name, active)")
+          .eq("clerk_id", userId)
+          .eq("schools.active", true);
         if (error) throw error;
         const list =
           (data ?? [])
@@ -140,8 +141,7 @@ export function useAssignedSchoolsQuery(userId: string | undefined, role: string
                   name: string;
                   active: boolean;
                 },
-            )
-            .filter((s) => s && s.active) ?? [];
+            ) ?? [];
         return list.map((s) => ({ id: s.id, name: s.name } as School));
       } else {
         const { data, error } = await supabase

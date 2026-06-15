@@ -33,13 +33,18 @@ function dequeue(): BookFormValues[] {
 
 export async function flushQueue(onError: (b: BookFormValues) => void) {
   const items = dequeue();
+  const failed: BookFormValues[] = [];
+  
   for (const book of items) {
-    const { error } = await supabase.from("books").insert(book);
+    const { error } = await supabase.from("books").upsert(book, { onConflict: 'id' });
     if (error) {
-      enqueue(book); // put it back in queue
+      failed.push(book); // Re-queue only failed items
       onError(book);
-      break; // Stop flushing if we hit an error (likely still offline)
     }
+  }
+  
+  if (failed.length > 0) {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(failed));
   }
 }
 
