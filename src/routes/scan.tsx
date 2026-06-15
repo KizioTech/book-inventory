@@ -148,11 +148,13 @@ function ScanPage() {
     flushQueue((failedBook) => {
       setRecoveryData(failedBook);
     });
-    
-    window.addEventListener("online", () => {
-      flushQueue((failedBook) => setRecoveryData(failedBook));
-    });
   };
+
+  useEffect(() => {
+    const handler = () => flushQueue((b) => setRecoveryData(b));
+    window.addEventListener("online", handler);
+    return () => window.removeEventListener("online", handler);
+  }, []);
 
   const handleDetected = async (code: string) => {
     setPaused(true);
@@ -273,8 +275,8 @@ function ScanPage() {
 
   const del = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this book?")) return;
+    setRecords(prev => prev.filter(b => b.id !== id));
     await supabase.from("books").delete().eq("id", id);
-    loadRecords(schoolId);
     toast.success("Book deleted");
   };
 
