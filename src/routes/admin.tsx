@@ -87,11 +87,6 @@ interface BookRow {
   created_at: string;
 }
 
-interface BookSummary {
-  school_id: string;
-  created_at: string;
-  quantity: number;
-}
 
 interface ClerkSchoolAssignment {
   clerk_id: string;
