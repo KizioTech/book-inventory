@@ -215,36 +215,32 @@ function SchoolsTab() {
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
-    const { data } = await supabase
-      .from("schools")
-      .select("*")
-      .order("created_at", { ascending: false });
-    setSchools((data as School[]) ?? []);
+    const [{ data: sData }, { data: stats }] = await Promise.all([
+      supabase
+        .from("schools")
+        .select("*")
+        .order("created_at", { ascending: false }),
+      supabase.rpc("get_school_stats"),
+    ]);
+    setSchools((sData as School[]) ?? []);
 
-    const { data: books } = await supabase
-      .from("books")
-      .select("school_id, created_at, quantity");
     const c: Record<string, number> = {};
+    const cc: Record<string, number> = {};
     const latest: Record<string, string> = {};
-    (books ?? []).forEach((b: BookSummary) => {
-      c[b.school_id] = (c[b.school_id] ?? 0) + (b.quantity ?? 1);
-      if (!latest[b.school_id] || new Date(b.created_at) > new Date(latest[b.school_id]))
-        latest[b.school_id] = b.created_at;
+    ((stats as Array<{ school_id: string; total_books: number; clerk_count: number; last_entry: string | null }>) ?? []).forEach((r) => {
+      c[r.school_id] = Number(r.total_books) || 0;
+      cc[r.school_id] = Number(r.clerk_count) || 0;
+      if (r.last_entry) latest[r.school_id] = r.last_entry;
     });
     setCounts(c);
-    setLastEntries(latest);
-
-    const { data: cs } = await supabase.from("clerk_schools").select("school_id");
-    const cc: Record<string, number> = {};
-    (cs ?? []).forEach((r: { school_id: string }) => {
-      cc[r.school_id] = (cc[r.school_id] ?? 0) + 1;
-    });
     setClerkCounts(cc);
+    setLastEntries(latest);
   };
-  
+
   useEffect(() => {
     load();
   }, []);
+
 
   const save = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
