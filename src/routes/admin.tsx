@@ -1265,12 +1265,13 @@ function RecordsTab() {
             </table>
           </div>
 
-          {filtered.length > PAGE_SIZE && (
+          {totalCount > PAGE_SIZE && (
             <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
               <span>
                 Showing {(page - 1) * PAGE_SIZE + 1}–
-                {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+                {Math.min(page * PAGE_SIZE, totalCount)} of {totalCount}
               </span>
+
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
