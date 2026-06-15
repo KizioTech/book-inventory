@@ -245,6 +245,33 @@ function ScanPage() {
       setRecords(prev => prev.filter(r => r.id !== deletedId));
     });
 
+    // Silently contribute to the shared metadata pool in the background.
+    // This enriches the pool for future projects at any school.
+    if (payload.title) {
+      (async () => {
+        try {
+          // If the book has an ISBN, skip if it's already in the pool
+          if (payload.isbn) {
+            const { data: existing } = await supabase
+              .from("book_metadata")
+              .select("id")
+              .eq("isbn", payload.isbn)
+              .maybeSingle();
+            if (existing) return; // Already known — nothing to do
+          }
+          await supabase.from("book_metadata").insert({
+            isbn:      payload.isbn,
+            title:     payload.title || "",
+            author:    payload.author,
+            publisher: payload.publisher,
+            year:      payload.year,
+          });
+        } catch {
+          // Silently ignore — metadata contribution is best-effort
+        }
+      })();
+    }
+
     setSaving(false);
     incrementCount();
     setLastScanned(`${payload.title || 'Untitled'} (×${payload.quantity})`);
