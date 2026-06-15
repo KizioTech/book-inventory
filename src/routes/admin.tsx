@@ -957,28 +957,93 @@ function ManageUserForm({
 const PAGE_SIZE = 50;
 
 function RecordsTab() {
-  const [books, setBooks] = useState<BookRow[]>([]);
+  const [pageRows, setPageRows] = useState<BookRow[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [schools, setSchools] = useState<School[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [schoolFilter, setSchoolFilter] = useState<string>("all");
   const [clerkFilter, setClerkFilter] = useState<string>("all");
   const [conditionFilter, setConditionFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const [totals, setTotals] = useState({
+    totalBooks: 0,
+    activeSchools: 0,
+    activeClerks: 0,
+    todayBooks: 0,
+  });
+  const [perSchool, setPerSchool] = useState<
+    Array<{
+      school: School;
+      total: number;
+      clerks: number;
+      lastEntry?: string;
+      status: StatusValue;
+    }>
+  >([]);
 
+  // Load lookups + summary once (cheap, joined via RPC + small tables)
   useEffect(() => {
     (async () => {
-      const [{ data: bks }, { data: scs }, { data: ps }] = await Promise.all([
-        supabase
-          .from("books")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(5000),
+      const [{ data: scs }, { data: ps }, { data: stats }] = await Promise.all([
         supabase.from("schools").select("*").order("name"),
         supabase.from("profiles").select("id, full_name, email, active"),
+        supabase.rpc("get_school_stats"),
       ]);
-      setBooks((bks as BookRow[]) ?? []);
-      setSchools((scs as School[]) ?? []);
+      const schoolsList = (scs as School[]) ?? [];
+      setSchools(schoolsList);
       setProfiles((ps as Profile[]) ?? []);
+
+      const statRows =
+        (stats as Array<{
+          school_id: string;
+          total_books: number;
+          clerk_count: number;
+          last_entry: string | null;
+        }>) ?? [];
+      const byId = new Map(statRows.map((r) => [r.school_id, r]));
+
+      const totalBooks = statRows.reduce(
+        (n, r) => n + (Number(r.total_books) || 0),
+        0,
+      );
+      const activeSchools = statRows.filter(
+        (r) => Number(r.total_books) > 0,
+      ).length;
+      const activeClerks = statRows.reduce(
+        (n, r) => n + (Number(r.clerk_count) || 0),
+        0,
+      );
+
+      // Today's books — single small count query
+      const since = new Date();
+      since.setHours(0, 0, 0, 0);
+      const { count: todayCount } = await supabase
+        .from("books")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", since.toISOString());
+
+      setTotals({
+        totalBooks,
+        activeSchools,
+        activeClerks,
+        todayBooks: todayCount ?? 0,
+      });
+
+      setPerSchool(
+        schoolsList.map((s) => {
+          const r = byId.get(s.id);
+          const total = Number(r?.total_books) || 0;
+          const clerks = Number(r?.clerk_count) || 0;
+          const lastEntry = r?.last_entry ?? undefined;
+          return {
+            school: s,
+            total,
+            clerks,
+            lastEntry,
+            status: schoolStatus(s.active, lastEntry),
+          };
+        }),
+      );
     })();
   }, []);
 
@@ -986,47 +1051,24 @@ function RecordsTab() {
     setPage(1);
   }, [schoolFilter, clerkFilter, conditionFilter]);
 
-  const filtered = useMemo(
-    () =>
-      books.filter(
-        (b) =>
-          (schoolFilter === "all" || b.school_id === schoolFilter) &&
-          (clerkFilter === "all" || b.clerk_id === clerkFilter) &&
-          (conditionFilter === "all" || b.condition === conditionFilter),
-      ),
-    [books, schoolFilter, clerkFilter, conditionFilter],
-  );
+  // Server-side paginated + filtered books query
+  useEffect(() => {
+    (async () => {
+      let q = supabase
+        .from("books")
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+      if (schoolFilter !== "all") q = q.eq("school_id", schoolFilter);
+      if (clerkFilter !== "all") q = q.eq("clerk_id", clerkFilter);
+      if (conditionFilter !== "all") q = q.eq("condition", conditionFilter);
+      const { data, count } = await q;
+      setPageRows((data as BookRow[]) ?? []);
+      setTotalCount(count ?? 0);
+    })();
+  }, [page, schoolFilter, clerkFilter, conditionFilter]);
 
-  const totals = useMemo(() => {
-    const totalBooks = books.reduce((n, b) => n + (b.quantity ?? 1), 0);
-    const activeSchools = new Set(books.map((b) => b.school_id)).size;
-    const activeClerks = new Set(books.map((b) => b.clerk_id)).size;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayBooks = books
-      .filter((b) => new Date(b.created_at) >= today)
-      .reduce((n, b) => n + (b.quantity ?? 1), 0);
-    return { totalBooks, activeSchools, activeClerks, todayBooks };
-  }, [books]);
-
-  const perSchool = useMemo(() => {
-    return schools.map((s) => {
-      const rows = books.filter((b) => b.school_id === s.id);
-      const total = rows.reduce((n, b) => n + (b.quantity ?? 1), 0);
-      const lastEntry = rows[0]?.created_at;
-      const clerks = new Set(rows.map((r) => r.clerk_id)).size;
-      return {
-        school: s,
-        total,
-        clerks,
-        lastEntry,
-        status: schoolStatus(s.active, lastEntry),
-      };
-    });
-  }, [schools, books]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const schoolName = (id: string) =>
     schools.find((s) => s.id === id)?.name ?? "—";
@@ -1038,8 +1080,10 @@ function RecordsTab() {
   const del = async (id: string) => {
     if (!window.confirm("Delete this record?")) return;
     await supabase.from("books").delete().eq("id", id);
-    setBooks((bs) => bs.filter((x) => x.id !== id));
+    setPageRows((bs) => bs.filter((x) => x.id !== id));
+    setTotalCount((c) => Math.max(0, c - 1));
   };
+
 
   return (
     <div className="space-y-6">
