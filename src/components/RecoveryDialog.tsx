@@ -51,7 +51,7 @@ export function RecoveryDialog({ data, onResolved }: Props) {
             v ? (
               <div key={k} className="col-span-2 sm:col-span-1">
                 <dt className="font-medium text-slate-500 capitalize">{k.replace('_', ' ')}</dt>
-                <dd className="break-words">{String(v)}</dd>
+                <dd className="wrap-break-words">{String(v)}</dd>
               </div>
             ) : null
           )}

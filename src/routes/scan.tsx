@@ -29,22 +29,8 @@ export const Route = createFileRoute("/scan")({
   component: ScanPage,
 });
 
-interface School {
-  id: string;
-  name: string;
-}
-interface BookRow {
-  id: string;
-  isbn: string | null;
-  title: string | null;
-  author: string | null;
-  publisher: string | null;
-  year: string | null;
-  quantity: number;
-  condition: string | null;
-  notes: string | null;
-  created_at: string;
-}
+import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useAssignedSchoolsQuery, type School, type BookRow } from "@/lib/queries";
 
 const empty = {
   isbn: "",
@@ -60,7 +46,10 @@ const empty = {
 function ScanPage() {
   const { user, profile, role, loading, signOut } = useAuth();
   const navigate = useNavigate();
-  const [schools, setSchools] = useState<School[]>([]);
+  const queryClient = useQueryClient();
+
+  const { data: schools = [] } = useAssignedSchoolsQuery(user?.id, role ?? undefined);
+
   const [schoolId, setSchoolId] = useState<string>("");
   const [locked, setLocked] = useState(false);
   const [form, setForm] = useState({ ...empty });
@@ -87,38 +76,6 @@ function ScanPage() {
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
   }, [user, loading, navigate]);
-
-  // Load assigned schools (clerks see only their assignments; staff see all)
-  useEffect(() => {
-    if (!user) return;
-    (async () => {
-      if (role === "clerk") {
-        const { data } = await supabase
-          .from("clerk_schools")
-          .select("school_id, schools(id, name, active)")
-          .eq("clerk_id", user.id);
-        const list =
-          (data ?? [])
-            .map(
-              (r) =>
-                r.schools as unknown as {
-                  id: string;
-                  name: string;
-                  active: boolean;
-                },
-            )
-            .filter((s) => s && s.active) ?? [];
-        setSchools(list.map((s) => ({ id: s.id, name: s.name })));
-      } else {
-        const { data } = await supabase
-          .from("schools")
-          .select("id, name")
-          .eq("active", true)
-          .order("name");
-        setSchools(data ?? []);
-      }
-    })();
-  }, [user, role]);
 
   const activeSchool = useMemo(
     () => schools.find((s) => s.id === schoolId),
@@ -267,17 +224,36 @@ function ScanPage() {
     setPaused(false);
   };
 
-  const updateQty = async (book: BookRow, qty: number) => {
-    if (qty < 0) return;
-    setRecords(prev => prev.map(r => r.id === book.id ? { ...r, quantity: qty } : r));
-    await supabase.from("books").update({ quantity: qty }).eq("id", book.id);
+  const updateQtyMutation = useMutation({
+    mutationFn: async ({ book, qty }: { book: BookRow, qty: number }) => {
+      if (qty < 0) return;
+      setRecords(prev => prev.map(r => r.id === book.id ? { ...r, quantity: qty } : r));
+      const { error } = await supabase.from("books").update({ quantity: qty }).eq("id", book.id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["books"] }),
+  });
+
+  const updateQty = (book: BookRow, qty: number) => {
+    updateQtyMutation.mutate({ book, qty });
   };
 
-  const del = async (id: string) => {
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("books").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Book deleted");
+      queryClient.invalidateQueries({ queryKey: ["books"] });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const del = (id: string) => {
     if (!window.confirm("Are you sure you want to delete this book?")) return;
     setRecords(prev => prev.filter(b => b.id !== id));
-    await supabase.from("books").delete().eq("id", id);
-    toast.success("Book deleted");
+    deleteMutation.mutate(id);
   };
 
   const exportCsv = () => {
@@ -606,7 +582,7 @@ function ScanPage() {
         onClose={() => setDetailBook(null)} 
         onEdit={(b) => {
           setDetailBook(null);
-          setEditTarget(b);
+          setEditTarget(b as unknown as BookRow);
         }} 
       />
 

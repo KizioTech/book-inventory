@@ -43,52 +43,28 @@ import { supabase } from "@/integrations/supabase/client";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { StatusBadge, type StatusValue } from "@/components/status-badge";
 import { AdminSidebar, type AdminTab } from "@/components/admin-sidebar";
+import {
+  useSchoolsQuery,
+  useSchoolStatsQuery,
+  useProfilesQuery,
+  useUserRolesQuery,
+  useClerkSchoolsQuery,
+  useBooksQuery,
+  useBooksCountQuery,
+  type School,
+  type Profile,
+  type RoleRow,
+  type BookRow,
+  type ClerkSchoolAssignment,
+  type SchoolStatsRow,
+} from "@/lib/queries";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-// Type definitions
-interface School {
-  id: string;
-  name: string;
-  district: string | null;
-  region: string | null;
-  contact: string | null;
-  notes: string | null;
-  active: boolean;
-  created_at: string;
-}
-
-interface Profile {
-  id: string;
-  full_name: string | null;
-  email: string | null;
-  active: boolean;
-}
-
-interface RoleRow {
-  user_id: string;
-  role: "super_admin" | "admin" | "clerk";
-}
-
-interface BookRow {
-  id: string;
-  isbn: string | null;
-  title: string | null;
-  author: string | null;
-  publisher: string | null;
-  year: string | null;
-  quantity: number;
-  condition: string | null;
-  notes: string | null;
-  school_id: string;
-  clerk_id: string;
-  created_at: string;
-}
-
-
-interface ClerkSchoolAssignment {
+interface ClerkSchoolAssignmentOld {
   clerk_id: string;
   school_id: string;
 }
@@ -201,43 +177,33 @@ function SectionHeader({
 // ---------------- Schools tab ----------------
 
 function SchoolsTab() {
-  const [schools, setSchools] = useState<School[]>([]);
-  const [counts, setCounts] = useState<Record<string, number>>({});
-  const [clerkCounts, setClerkCounts] = useState<Record<string, number>>({});
-  const [lastEntries, setLastEntries] = useState<Record<string, string>>({});
+  const queryClient = useQueryClient();
+  const { data: schools = [], isLoading: loadingSchools } = useSchoolsQuery();
+  const { data: stats = [], isLoading: loadingStats } = useSchoolStatsQuery();
+
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<School | null>(null);
-  const [saving, setSaving] = useState(false);
 
-  const load = async () => {
-    const [{ data: sData }, { data: stats }] = await Promise.all([
-      supabase
-        .from("schools")
-        .select("*")
-        .order("created_at", { ascending: false }),
-      supabase.rpc("get_school_stats"),
-    ]);
-    setSchools((sData as School[]) ?? []);
+  const saveMutation = useMutation({
+    mutationFn: async (payload: Omit<School, "id" | "created_at" | "active">) => {
+      if (editing) {
+        const { error } = await supabase.from("schools").update(payload).eq("id", editing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("schools").insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast.success(editing ? "School updated" : "School added");
+      setOpen(false);
+      setEditing(null);
+      queryClient.invalidateQueries({ queryKey: ["schools"] });
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
-    const c: Record<string, number> = {};
-    const cc: Record<string, number> = {};
-    const latest: Record<string, string> = {};
-    ((stats as Array<{ school_id: string; total_books: number; clerk_count: number; last_entry: string | null }>) ?? []).forEach((r) => {
-      c[r.school_id] = Number(r.total_books) || 0;
-      cc[r.school_id] = Number(r.clerk_count) || 0;
-      if (r.last_entry) latest[r.school_id] = r.last_entry;
-    });
-    setCounts(c);
-    setClerkCounts(cc);
-    setLastEntries(latest);
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
-
-
-  const save = async (e: React.FormEvent<HTMLFormElement>) => {
+  const save = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const payload = {
@@ -247,22 +213,31 @@ function SchoolsTab() {
       contact: String(f.get("contact") || "") || null,
       notes: String(f.get("notes") || "") || null,
     };
-    setSaving(true);
-    const res = editing
-      ? await supabase.from("schools").update(payload).eq("id", editing.id)
-      : await supabase.from("schools").insert(payload);
-    setSaving(false);
-    if (res.error) return toast.error(res.error.message);
-    toast.success(editing ? "School updated" : "School added");
-    setOpen(false);
-    setEditing(null);
-    load();
+    saveMutation.mutate(payload);
   };
 
-  const toggleActive = async (s: School) => {
-    await supabase.from("schools").update({ active: !s.active }).eq("id", s.id);
-    load();
-  };
+  const toggleMutation = useMutation({
+    mutationFn: async (s: School) => {
+      const { error } = await supabase.from("schools").update({ active: !s.active }).eq("id", s.id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["schools"] }),
+    onError: (err) => toast.error(err.message),
+  });
+
+  const counts: Record<string, number> = {};
+  const clerkCounts: Record<string, number> = {};
+  const lastEntries: Record<string, string> = {};
+  
+  stats.forEach((r) => {
+    counts[r.school_id] = Number(r.total_books) || 0;
+    clerkCounts[r.school_id] = Number(r.clerk_count) || 0;
+    if (r.last_entry) lastEntries[r.school_id] = r.last_entry;
+  });
+
+  if (loadingSchools || loadingStats) {
+    return <div className="py-10 text-center text-slate-500">Loading schools...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -324,7 +299,7 @@ function SchoolsTab() {
                 >
                   Edit
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => toggleActive(s)}>
+                <Button size="sm" variant="ghost" onClick={() => toggleMutation.mutate(s)} disabled={toggleMutation.isPending}>
                   {s.active ? "Pause" : "Unpause"}
                 </Button>
               </div>
@@ -381,8 +356,8 @@ function SchoolsTab() {
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={saving}>
-                {saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              <Button type="submit" disabled={saveMutation.isPending}>
+                {saveMutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
                 {editing ? "Save" : "Create"}
               </Button>
             </DialogFooter>
@@ -397,44 +372,83 @@ function SchoolsTab() {
 
 function UsersTab() {
   const { role: myRole } = useAuth();
-  const [users, setUsers] = useState<Profile[]>([]);
-  const [roles, setRoles] = useState<Record<string, string[]>>({});
-  const [schools, setSchools] = useState<School[]>([]);
-  const [assignments, setAssignments] = useState<Record<string, string[]>>({});
+  const queryClient = useQueryClient();
+
+  const { data: users = [], isLoading: l1 } = useProfilesQuery();
+  const { data: rolesData = [], isLoading: l2 } = useUserRolesQuery();
+  const { data: schools = [], isLoading: l3 } = useSchoolsQuery();
+  const { data: clerkSchools = [], isLoading: l4 } = useClerkSchoolsQuery();
+
+  const roles: Record<string, string[]> = {};
+  rolesData.forEach((r) => {
+    roles[r.user_id] = [...(roles[r.user_id] ?? []), r.role];
+  });
+
+  const assignments: Record<string, string[]> = {};
+  clerkSchools.forEach((c) => {
+    assignments[c.clerk_id] = [...(assignments[c.clerk_id] ?? []), c.school_id];
+  });
+
   const [manageOpen, setManageOpen] = useState(false);
   const [target, setTarget] = useState<Profile | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
-  const load = async () => {
-    const [{ data: ps }, { data: rs }, { data: sc }, { data: cs }] =
-      await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, full_name, email, active")
-          .order("created_at", { ascending: false }),
-        supabase.from("user_roles").select("user_id, role"),
-        supabase.from("schools").select("*").order("name"),
-        supabase.from("clerk_schools").select("clerk_id, school_id"),
-      ]);
-    setUsers((ps as Profile[]) ?? []);
-    const rmap: Record<string, string[]> = {};
-    ((rs as RoleRow[]) ?? []).forEach((r) => {
-      rmap[r.user_id] = [...(rmap[r.user_id] ?? []), r.role];
-    });
-    setRoles(rmap);
-    setSchools((sc as School[]) ?? []);
-    const amap: Record<string, string[]> = {};
-    ((cs as ClerkSchoolAssignment[]) ?? []).forEach((c) => {
-      amap[c.clerk_id] = [...(amap[c.clerk_id] ?? []), c.school_id];
-    });
-    setAssignments(amap);
+  const saveTargetMutation = useMutation({
+    mutationFn: async ({ uid, newRole, selected }: { uid: string; newRole: "clerk" | "admin" | "super_admin"; selected: string[] }) => {
+      if (myRole === "super_admin") {
+        await supabase.from("user_roles").delete().eq("user_id", uid);
+        await supabase.from("user_roles").insert({ user_id: uid, role: newRole });
+      }
+      await supabase.from("clerk_schools").delete().eq("clerk_id", uid);
+      if (selected.length) {
+        await supabase
+          .from("clerk_schools")
+          .insert(selected.map((sid) => ({ clerk_id: uid, school_id: sid })));
+      }
+    },
+    onSuccess: () => {
+      toast.success("User updated");
+      setManageOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["user_roles"] });
+      queryClient.invalidateQueries({ queryKey: ["clerk_schools"] });
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async (u: Profile) => {
+      await supabase.from("profiles").update({ active: !u.active }).eq("id", u.id);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["profiles"] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (u: Profile) => {
+      const { error } = await supabase.functions.invoke("delete-user", {
+        body: { user_id: u.id },
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_, u) => {
+      toast.success(`${u.full_name ?? u.email} has been deleted.`);
+      setDeleteTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["user_roles"] });
+      queryClient.invalidateQueries({ queryKey: ["clerk_schools"] });
+    },
+    onError: (err) => toast.error(err.message || "Failed to delete user"),
+  });
+
+  const saveTarget = (newRole: "clerk" | "admin" | "super_admin", selected: string[]) => {
+    if (!target) return;
+    saveTargetMutation.mutate({ uid: target.id, newRole, selected });
   };
-  
-  useEffect(() => {
-    load();
-  }, []);
+
+  const toggleActive = (u: Profile) => toggleMutation.mutate(u);
+
+  const deleteUser = () => {
+    if (deleteTarget) deleteMutation.mutate(deleteTarget);
+  };
 
   const rankFor = (uid: string) => {
     const r = roles[uid] ?? [];
@@ -449,55 +463,12 @@ function UsersTab() {
     return "bg-blue-100 text-blue-700";
   };
 
-  const setAssignmentsFor = async (uid: string, selected: string[]) => {
-    await supabase.from("clerk_schools").delete().eq("clerk_id", uid);
-    if (selected.length) {
-      await supabase
-        .from("clerk_schools")
-        .insert(selected.map((sid) => ({ clerk_id: uid, school_id: sid })));
-    }
-  };
-
-  const saveTarget = async (
-    newRole: "clerk" | "admin" | "super_admin",
-    selected: string[],
-  ) => {
-    if (!target) return;
-    if (myRole === "super_admin") {
-      await supabase.from("user_roles").delete().eq("user_id", target.id);
-      await supabase
-        .from("user_roles")
-        .insert({ user_id: target.id, role: newRole });
-    }
-    await setAssignmentsFor(target.id, selected);
-    toast.success("User updated");
-    setManageOpen(false);
-    load();
-  };
-
-  const toggleActive = async (u: Profile) => {
-    await supabase.from("profiles").update({ active: !u.active }).eq("id", u.id);
-    load();
-  };
-
   const { user } = useAuth();
   const myId = user?.id;
 
-  const deleteUser = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    const { error: invokeErr } = await supabase.functions.invoke("delete-user", {
-      body: { user_id: deleteTarget.id },
-    });
-    setDeleting(false);
-    if (invokeErr) {
-      toast.error(invokeErr.message || "Failed to delete user");
-      return;
-    }
-    toast.success(`${deleteTarget.full_name ?? deleteTarget.email} has been deleted.`);
-    setDeleteTarget(null);
-    load();
-  };
+  if (l1 || l2 || l3 || l4) {
+    return <div className="py-10 text-center text-slate-500">Loading users...</div>;
+  }
 
   const activeCount = users.filter((u) => u.active).length;
 
@@ -627,7 +598,7 @@ function UsersTab() {
         onOpenChange={setCreateOpen}
         schools={schools}
         canCreateAdmin={myRole === "super_admin"}
-        onCreated={load}
+        onCreated={() => queryClient.invalidateQueries({ queryKey: ["profiles"] })}
       />
 
       {/* ── Delete confirmation dialog ─────────────────────────────── */}
@@ -646,16 +617,16 @@ function UsersTab() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleteMutation.isPending}>
               Cancel
             </Button>
             <Button
               variant="destructive"
               onClick={deleteUser}
-              disabled={deleting}
+              disabled={deleteMutation.isPending}
               className="bg-red-600 hover:bg-red-700"
             >
-              {deleting && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              {deleteMutation.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
               Delete permanently
             </Button>
           </DialogFooter>
@@ -952,116 +923,69 @@ function ManageUserForm({
 const PAGE_SIZE = 50;
 
 function RecordsTab() {
-  const [pageRows, setPageRows] = useState<BookRow[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [schools, setSchools] = useState<School[]>([]);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const queryClient = useQueryClient();
   const [schoolFilter, setSchoolFilter] = useState<string>("all");
   const [clerkFilter, setClerkFilter] = useState<string>("all");
   const [conditionFilter, setConditionFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
-  const [totals, setTotals] = useState({
-    totalBooks: 0,
-    activeSchools: 0,
-    activeClerks: 0,
-    todayBooks: 0,
-  });
-  const [perSchool, setPerSchool] = useState<
-    Array<{
-      school: School;
-      total: number;
-      clerks: number;
-      lastEntry?: string;
-      status: StatusValue;
-    }>
-  >([]);
 
-  // Load lookups + summary once (cheap, joined via RPC + small tables)
-  useEffect(() => {
-    (async () => {
-      const [{ data: scs }, { data: ps }, { data: stats }] = await Promise.all([
-        supabase.from("schools").select("*").order("name"),
-        supabase.from("profiles").select("id, full_name, email, active"),
-        supabase.rpc("get_school_stats"),
-      ]);
-      const schoolsList = (scs as School[]) ?? [];
-      setSchools(schoolsList);
-      setProfiles((ps as Profile[]) ?? []);
+  const { data: schools = [], isLoading: l1 } = useSchoolsQuery();
+  const { data: profiles = [], isLoading: l2 } = useProfilesQuery();
+  const { data: stats = [], isLoading: l3 } = useSchoolStatsQuery();
+  const { data: todayBooksCount = 0, isLoading: l4 } = useBooksCountQuery({ range: "today" });
 
-      const statRows =
-        (stats as Array<{
-          school_id: string;
-          total_books: number;
-          clerk_count: number;
-          last_entry: string | null;
-        }>) ?? [];
-      const byId = new Map(statRows.map((r) => [r.school_id, r]));
-
-      const totalBooks = statRows.reduce(
-        (n, r) => n + (Number(r.total_books) || 0),
-        0,
-      );
-      const activeSchools = statRows.filter(
-        (r) => Number(r.total_books) > 0,
-      ).length;
-      const activeClerks = statRows.reduce(
-        (n, r) => n + (Number(r.clerk_count) || 0),
-        0,
-      );
-
-      // Today's books — single small count query
-      const since = new Date();
-      since.setHours(0, 0, 0, 0);
-      const { count: todayCount } = await supabase
-        .from("books")
-        .select("id", { count: "exact", head: true })
-        .gte("created_at", since.toISOString());
-
-      setTotals({
-        totalBooks,
-        activeSchools,
-        activeClerks,
-        todayBooks: todayCount ?? 0,
-      });
-
-      setPerSchool(
-        schoolsList.map((s) => {
-          const r = byId.get(s.id);
-          const total = Number(r?.total_books) || 0;
-          const clerks = Number(r?.clerk_count) || 0;
-          const lastEntry = r?.last_entry ?? undefined;
-          return {
-            school: s,
-            total,
-            clerks,
-            lastEntry,
-            status: schoolStatus(s.active, lastEntry),
-          };
-        }),
-      );
-    })();
-  }, []);
+  const filters = {
+    schoolId: schoolFilter === "all" ? undefined : schoolFilter,
+    clerkId: clerkFilter === "all" ? undefined : clerkFilter,
+    condition: conditionFilter === "all" ? undefined : conditionFilter,
+  };
+  const { data: booksData, isLoading: l5 } = useBooksQuery(filters, page, PAGE_SIZE);
+  const pageRows = booksData?.data ?? [];
+  const totalCount = booksData?.count ?? 0;
 
   useEffect(() => {
     setPage(1);
   }, [schoolFilter, clerkFilter, conditionFilter]);
 
-  // Server-side paginated + filtered books query
-  useEffect(() => {
-    (async () => {
-      let q = supabase
-        .from("books")
-        .select("*", { count: "exact" })
-        .order("created_at", { ascending: false })
-        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
-      if (schoolFilter !== "all") q = q.eq("school_id", schoolFilter);
-      if (clerkFilter !== "all") q = q.eq("clerk_id", clerkFilter);
-      if (conditionFilter !== "all") q = q.eq("condition", conditionFilter);
-      const { data, count } = await q;
-      setPageRows((data as BookRow[]) ?? []);
-      setTotalCount(count ?? 0);
-    })();
-  }, [page, schoolFilter, clerkFilter, conditionFilter]);
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("books").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["books"] });
+      queryClient.invalidateQueries({ queryKey: ["school_stats"] });
+      queryClient.invalidateQueries({ queryKey: ["books_count"] });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const del = (id: string) => {
+    if (!window.confirm("Delete this record?")) return;
+    deleteMutation.mutate(id);
+  };
+
+  const byId = new Map(stats.map((r) => [r.school_id, r]));
+  const totals = {
+    totalBooks: stats.reduce((n, r) => n + (Number(r.total_books) || 0), 0),
+    activeSchools: stats.filter((r) => Number(r.total_books) > 0).length,
+    activeClerks: stats.reduce((n, r) => n + (Number(r.clerk_count) || 0), 0),
+    todayBooks: todayBooksCount,
+  };
+
+  const perSchool = schools.map((s) => {
+    const r = byId.get(s.id);
+    const total = Number(r?.total_books) || 0;
+    const clerks = Number(r?.clerk_count) || 0;
+    const lastEntry = r?.last_entry ?? undefined;
+    return {
+      school: s,
+      total,
+      clerks,
+      lastEntry,
+      status: schoolStatus(s.active, lastEntry),
+    };
+  });
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
@@ -1072,12 +996,9 @@ function RecordsTab() {
     profiles.find((p) => p.id === id)?.email ??
     "—";
 
-  const del = async (id: string) => {
-    if (!window.confirm("Delete this record?")) return;
-    await supabase.from("books").delete().eq("id", id);
-    setPageRows((bs) => bs.filter((x) => x.id !== id));
-    setTotalCount((c) => Math.max(0, c - 1));
-  };
+  if (l1 || l2 || l3 || l4 || (l5 && pageRows.length === 0)) {
+    return <div className="py-10 text-center text-slate-500">Loading records...</div>;
+  }
 
 
   return (
@@ -1238,8 +1159,9 @@ function RecordsTab() {
                     <td className="px-4 py-2 text-right">
                       <button
                         onClick={() => del(b.id)}
+                        disabled={deleteMutation.isPending}
                         aria-label="Delete"
-                        className="rounded p-1 hover:bg-red-50"
+                        className="rounded p-1 hover:bg-red-50 disabled:opacity-50"
                       >
                         <Trash2
                           size={15}
@@ -1321,20 +1243,16 @@ function SummaryCard({
 // ---------------- Export tab ----------------
 
 function ExportTab() {
-  const [schools, setSchools] = useState<School[]>([]);
   const [schoolId, setSchoolId] = useState<string>("all");
   const [range, setRange] = useState<"all" | "today" | "week" | "month">("all");
-  const [estimate, setEstimate] = useState<number>(0);
   const [busy, setBusy] = useState(false);
   const [lastExport, setLastExport] = useState<string | null>(null);
 
-  useEffect(() => {
-    supabase
-      .from("schools")
-      .select("*")
-      .order("name")
-      .then(({ data }) => setSchools((data as School[]) ?? []));
-  }, []);
+  const { data: schools = [], isLoading: l1 } = useSchoolsQuery();
+  const { data: estimate = 0, isLoading: l2 } = useBooksCountQuery({
+    schoolId: schoolId === "all" ? undefined : schoolId,
+    range,
+  });
 
   const applyFilters = <T extends object>(q: T): T => {
     let query = q as ReturnType<typeof supabase.from>;
@@ -1348,18 +1266,6 @@ function ExportTab() {
     }
     return query as unknown as T;
   };
-
-  // Re-fetch count whenever filters change
-  useEffect(() => {
-    (async () => {
-      const base = supabase
-        .from("books")
-        .select("id", { count: "exact", head: true });
-      const { count } = await applyFilters(base);
-      setEstimate(count ?? 0);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schoolId, range]);
 
   const exportAll = async () => {
     setBusy(true);
@@ -1455,7 +1361,7 @@ function ExportTab() {
 
         {/* Estimate + action */}
         <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          {estimate === 0
+          {l2 ? "Loading estimate..." : estimate === 0
             ? "No records match the current filters."
             : <>Ready to export <span className="font-semibold text-slate-900">{estimate.toLocaleString()}</span> row{estimate !== 1 ? "s" : ""}.</>
           }

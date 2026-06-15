@@ -70,7 +70,7 @@ function ResetPasswordPage() {
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background to-secondary/40 px-4">
+      <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-background to-secondary/40 px-4">
         <Card className="w-full max-w-md rounded-2xl border border-slate-200 shadow-sm">
           <CardContent className="pt-8 pb-8 text-center space-y-3">
             <KeyRound className="mx-auto h-10 w-10 text-slate-300" />
@@ -95,7 +95,7 @@ function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-background to-secondary/40 px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-background to-secondary/40 px-4 py-12">
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center gap-2">
           <img

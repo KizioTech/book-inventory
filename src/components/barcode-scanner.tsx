@@ -72,7 +72,7 @@ export function BarcodeScanner({ onDetected, paused }: Props) {
   }
 
   return (
-    <div className="relative overflow-hidden rounded-lg bg-black aspect-[4/3]">
+    <div className="relative overflow-hidden rounded-lg bg-black aspect-4/3">
       <video
         ref={videoRef}
         className="h-full w-full object-cover"
