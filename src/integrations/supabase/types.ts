@@ -80,6 +80,37 @@ export type Database = {
           },
         ]
       }
+      book_metadata: {
+        Row: {
+          id: string
+          isbn: string | null
+          title: string
+          author: string | null
+          publisher: string | null
+          year: string | null
+          category: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          isbn?: string | null
+          title: string
+          author?: string | null
+          publisher?: string | null
+          year?: string | null
+          category?: string | null
+          created_at?: string
+        }
+        Update: {
+          isbn?: string | null
+          title?: string
+          author?: string | null
+          publisher?: string | null
+          year?: string | null
+          category?: string | null
+        }
+        Relationships: []
+      }
       clerk_schools: {
         Row: {
           clerk_id: string

@@ -10,15 +10,17 @@ import {
   X,
   ScanLine,
   ShieldCheck,
+  Database,
 } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 
-export type AdminTab = "schools" | "users" | "records" | "export";
+export type AdminTab = "schools" | "users" | "records" | "export" | "metadata";
 
 const NAV: { id: AdminTab; label: string; icon: ElementType<{ size?: number }> }[] = [
   { id: "schools", label: "Schools", icon: SchoolIcon },
   { id: "users", label: "Users", icon: Users },
   { id: "records", label: "Records", icon: BarChart2 },
+  { id: "metadata", label: "Reference Data", icon: Database },
   { id: "export", label: "Export", icon: Download },
 ];
 

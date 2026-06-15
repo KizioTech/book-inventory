@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import {
   Plus,
   Trash2,
@@ -69,6 +69,7 @@ import {
   type SchoolStatsRow,
 } from "@/lib/queries";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { type BookMeta } from "@/lib/book-metadata";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
@@ -155,6 +156,7 @@ function AdminPage() {
           {tab === "schools" && <SchoolsTab />}
           {tab === "users" && <UsersTab />}
           {tab === "records" && <RecordsTab />}
+          {tab === "metadata" && <MetadataTab />}
           {tab === "export" && <ExportTab />}
         </div>
       </main>
@@ -1600,6 +1602,169 @@ function ExportTab() {
           <p className="text-xs text-slate-400 text-center">
             Last export: {lastExport}
           </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MetadataTab() {
+  const [search, setSearch] = useState("");
+  const [results, setResults] = useState<BookMeta[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importStats, setImportStats] = useState<{
+    inserted: number; skipped: number;
+  } | null>(null);
+  const [count, setCount] = useState<number | null>(null);
+
+  // Load total count on mount
+  useEffect(() => {
+    supabase
+      .from("book_metadata")
+      .select("id", { count: "exact", head: true })
+      .then(({ count }) => setCount(count ?? 0));
+  }, [importStats]);
+
+  // Debounced search
+  const searchRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const handleSearch = (q: string) => {
+    setSearch(q);
+    clearTimeout(searchRef.current);
+    if (q.length < 2) { setResults([]); return; }
+    searchRef.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from("book_metadata")
+        .select("title, author, isbn, publisher, year, category")
+        .ilike("title", `%${q}%`)
+        .limit(20);
+      setResults((data as BookMeta[]) ?? []);
+    }, 300);
+  };
+
+  // CSV import handler
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportStats(null);
+
+    const text = await file.text();
+    const lines = text.trim().split("\n");
+    const header = lines[0].split(",").map((h) => h.trim().replace(/"/g, ""));
+
+    const idx = (name: string) => header.indexOf(name);
+
+    const rows = lines.slice(1).map((line) => {
+      // naive CSV split (sufficient for this data; no embedded newlines)
+      const cols = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+      const isbn = cols[idx("isbn")]?.replace(/[^0-9Xx]/g, "") || null;
+      return {
+        isbn:      isbn || null,
+        title:     cols[idx("book_title")]  || "",
+        author:    cols[idx("author")]      || null,
+        publisher: cols[idx("publisher")]   || null,
+        year:      cols[idx("year_published")] || null,
+        category:  cols[idx("category_name")] || null,
+      };
+    }).filter((r) => r.title !== "");
+
+    let inserted = 0;
+    const skipped = 0;
+    // Upsert in batches of 50
+    for (let i = 0; i < rows.length; i += 50) {
+      const batch = rows.slice(i, i + 50);
+      const { error } = await supabase
+        .from("book_metadata")
+        .upsert(batch, { onConflict: "isbn", ignoreDuplicates: true });
+      if (error) {
+        toast.error(`Batch ${Math.floor(i / 50) + 1} failed: ${error.message}`);
+      } else {
+        inserted += batch.length;
+      }
+    }
+
+    setImporting(false);
+    setImportStats({ inserted, skipped });
+    toast.success(`Import complete — ${inserted} rows processed`);
+    e.target.value = "";
+  };
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader
+        title="Reference Data"
+        subtitle={
+          count !== null
+            ? `${count.toLocaleString()} books in the shared metadata pool`
+            : "Loading…"
+        }
+      />
+
+      {/* Import card */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+        <p className="text-sm font-semibold text-slate-700">Import from CSV</p>
+        <p className="text-sm text-slate-500">
+          Upload a CSV with columns:{" "}
+          <code className="text-xs bg-slate-100 px-1 rounded">
+            book_title, author, isbn, publisher, year_published, category_name
+          </code>
+          . Existing ISBN matches are skipped.
+        </p>
+        <label className="flex items-center gap-3 cursor-pointer">
+          <Button asChild variant="outline" disabled={importing}>
+            <span>
+              {importing && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              {importing ? "Importing…" : "Choose CSV file"}
+            </span>
+          </Button>
+          <input
+            type="file"
+            accept=".csv"
+            className="sr-only"
+            onChange={handleImport}
+            disabled={importing}
+          />
+        </label>
+        {importStats && (
+          <p className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
+            ✓ {importStats.inserted} rows imported successfully.
+          </p>
+        )}
+      </div>
+
+      {/* Search card */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+        <p className="text-sm font-semibold text-slate-700">Browse / verify</p>
+        <Input
+          placeholder="Search by title…"
+          value={search}
+          onChange={(e) => handleSearch(e.target.value)}
+        />
+        {results.length > 0 && (
+          <div className="overflow-x-auto rounded-lg border border-slate-100">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-3 py-2 text-left">Title</th>
+                  <th className="px-3 py-2 text-left">Author</th>
+                  <th className="px-3 py-2 text-left">ISBN</th>
+                  <th className="px-3 py-2 text-left">Publisher</th>
+                  <th className="px-3 py-2 text-left">Year</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.map((r, i) => (
+                  <tr key={i} className="border-t border-slate-100">
+                    <td className="px-3 py-2 font-medium">{r.title}</td>
+                    <td className="px-3 py-2 text-slate-500">{r.author || "—"}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{r.isbn || "—"}</td>
+                    <td className="px-3 py-2 text-slate-500">{r.publisher || "—"}</td>
+                    <td className="px-3 py-2 text-slate-500">{r.year || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

@@ -1,9 +1,4 @@
-export interface BookMeta {
-  title: string;
-  author: string;
-  publisher: string;
-  year: string;
-}
+import { lookupMetadataByIsbn, type BookMeta } from "./book-metadata";
 
 /**
  * Lookup book metadata by ISBN.
@@ -14,6 +9,14 @@ export async function lookupIsbn(isbn: string): Promise<BookMeta | null> {
   // Keep digits and X/x only (valid ISBN characters)
   const clean = isbn.replace(/[^0-9Xx]/g, "");
   if (clean.length < 10) return null;
+
+  // ── 0. Local Supabase pool (fastest; works offline) ─────────────────────
+  try {
+    const local = await lookupMetadataByIsbn(clean);
+    if (local?.title) return local;
+  } catch {
+    // offline or RLS error — fall through
+  }
 
   // ── 1. Try Google Books ──────────────────────────────────────────────────
   try {

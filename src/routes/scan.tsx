@@ -24,6 +24,18 @@ import { saveBookInBackground, flushQueue, BookFormValues } from "@/lib/bookQueu
 import { RecoveryDialog } from "@/components/RecoveryDialog";
 import { BookDetailSheet, BookDetail } from "@/components/BookDetailSheet";
 import { EditBookDialog } from "@/components/EditBookDialog";
+import { searchMetadataByTitle, type BookMeta } from "@/lib/book-metadata";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useRef } from "react";
 
 export const Route = createFileRoute("/scan")({
   component: ScanPage,
@@ -57,6 +69,14 @@ function ScanPage() {
   const [paused, setPaused] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
+
+  // Metadata search
+  const [titleSuggestions, setTitleSuggestions] = useState<BookMeta[]>([]);
+  const titleDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Alert dialogs
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [fuzzyWarning, setFuzzyWarning] = useState<{ similar: { id: string; title: string | null; quantity: number }[]; payload: BookFormValues } | null>(null);
 
   const [scanCount, setScanCount] = useState<number>(() =>
     parseInt(sessionStorage.getItem("scanCount") ?? "0", 10)
@@ -161,7 +181,17 @@ function ScanPage() {
     }
   };
 
-  const save = async () => {
+  const handleTitleChange = (value: string) => {
+    setForm((f) => ({ ...f, title: value }));
+    clearTimeout(titleDebounce.current);
+    if (value.length < 2) { setTitleSuggestions([]); return; }
+    titleDebounce.current = setTimeout(async () => {
+      const results = await searchMetadataByTitle(value);
+      setTitleSuggestions(results);
+    }, 300);
+  };
+
+  const save = async (forceDuplicate = false) => {
     if (!user || !schoolId) return;
     
     const trimmedIsbn = form.isbn?.trim();
@@ -170,22 +200,6 @@ function ScanPage() {
       return;
     }
 
-    // Fuzzy duplicate warning (No ISBN)
-    if (!trimmedIsbn && form.title?.trim()) {
-      const { data: similar } = await supabase
-        .from("books")
-        .select("id, title, quantity")
-        .eq("school_id", schoolId)
-        .ilike("title", `%${form.title.trim()}%`)
-        .limit(3);
-
-      if (similar?.length) {
-        if (!window.confirm(`Found similar books in this school:\n${similar.map(s => `- ${s.title}`).join('\n')}\n\nDo you want to continue creating a new record?`)) {
-          return;
-        }
-      }
-    }
-    
     const payload: BookFormValues = {
       id: crypto.randomUUID(), // Client generated ID
       isbn: trimmedIsbn || null,
@@ -199,6 +213,21 @@ function ScanPage() {
       school_id: schoolId,
       clerk_id: user.id,
     };
+
+    // Fuzzy duplicate warning (No ISBN)
+    if (!trimmedIsbn && form.title?.trim() && !forceDuplicate) {
+      const { data: similar } = await supabase
+        .from("books")
+        .select("id, title, quantity")
+        .eq("school_id", schoolId)
+        .ilike("title", `%${form.title.trim()}%`)
+        .limit(3);
+
+      if (similar?.length) {
+        setFuzzyWarning({ similar, payload });
+        return;
+      }
+    }
 
     setSaving(true);
 
@@ -250,10 +279,12 @@ function ScanPage() {
     onError: (err) => toast.error(err.message),
   });
 
-  const del = (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this book?")) return;
-    setRecords(prev => prev.filter(b => b.id !== id));
-    deleteMutation.mutate(id);
+  const confirmDelete = () => {
+    if (deleteTarget) {
+      setRecords(prev => prev.filter(b => b.id !== deleteTarget));
+      deleteMutation.mutate(deleteTarget);
+      setDeleteTarget(null);
+    }
   };
 
   const exportCsv = () => {
@@ -417,12 +448,32 @@ function ScanPage() {
                 </Button>
               </div>
             </div>
-            <div className="col-span-2 space-y-1.5">
+            <div className="col-span-2 space-y-1.5 relative">
               <Label>Title</Label>
               <Input
                 value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                autoComplete="off"
               />
+              {titleSuggestions.length > 0 && (
+                <ul className="absolute z-20 w-full mt-1 rounded-xl border border-slate-200 bg-white shadow-lg text-sm overflow-hidden">
+                  {titleSuggestions.map((s, i) => (
+                    <li
+                      key={i}
+                      className="px-4 py-2 cursor-pointer hover:bg-slate-50"
+                      onClick={() => {
+                        setForm((f) => ({ ...f, ...s, isbn: s.isbn || f.isbn }));
+                        setTitleSuggestions([]);
+                      }}
+                    >
+                      <span className="font-medium">{s.title}</span>
+                      {s.author && (
+                        <span className="ml-2 text-slate-400">{s.author}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div className="col-span-2 space-y-1.5">
               <Label>Author(s)</Label>
@@ -487,7 +538,7 @@ function ScanPage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button onClick={save} disabled={saving} className="flex-1">
+            <Button onClick={() => save()} disabled={saving} className="flex-1">
               <Save className="mr-1 h-4 w-4" />
               {saving ? "Saving…" : "Save book"}
             </Button>
@@ -560,12 +611,12 @@ function ScanPage() {
                       </td>
                       <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                         <Button
+                          size="sm"
                           variant="ghost"
-                          size="icon"
-                          onClick={() => del(r.id)}
-                          aria-label="Delete"
+                          className="h-7 px-2 text-red-600 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => setDeleteTarget(r.id)}
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </td>
                     </tr>
@@ -586,11 +637,59 @@ function ScanPage() {
         }} 
       />
 
-      <EditBookDialog 
-        book={editTarget} 
-        onClose={() => setEditTarget(null)} 
-        onSaved={() => loadRecords(schoolId)}
-      />
+      {editTarget && (
+        <EditBookDialog
+          book={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => loadRecords(schoolId)}
+        />
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this book? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Fuzzy Duplicate Warning Dialog */}
+      <AlertDialog open={!!fuzzyWarning} onOpenChange={(o) => { if (!o) setFuzzyWarning(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Similar books found</AlertDialogTitle>
+            <AlertDialogDescription>
+              <p className="mb-2">Found similar books in this school:</p>
+              <ul className="list-disc pl-5 mb-4 space-y-1 text-slate-700">
+                {fuzzyWarning?.similar.map(s => (
+                  <li key={s.id}>{s.title} (Qty: {s.quantity})</li>
+                ))}
+              </ul>
+              Do you want to continue creating a new record?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const p = fuzzyWarning;
+                setFuzzyWarning(null);
+                save(true);
+              }}
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <RecoveryDialog 
         data={recoveryData} 
