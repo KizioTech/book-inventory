@@ -194,6 +194,15 @@ export type Database = {
         Args: { _school_id: string; _user_id: string }
         Returns: boolean
       }
+      get_school_stats: {
+        Args: never
+        Returns: {
+          clerk_count: number
+          last_entry: string
+          school_id: string
+          total_books: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
