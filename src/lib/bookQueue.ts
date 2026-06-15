@@ -10,7 +10,8 @@ export interface BookFormValues {
   year: string | null;
   quantity: number;
   condition: string | null;
-  notes: string | null;
+  category: string | null;
+  shelf_location: string | null;
   school_id: string;
   clerk_id: string;
 }

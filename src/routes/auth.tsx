@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
+import logoImg from "@/assets/blue-logo.png";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -76,7 +77,7 @@ function AuthPage() {
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center justify-center gap-2">
           <div className="flex flex-col items-center gap-3">
-            <img src="/blue-logo.png" alt="FutecAI Logo" className="h-16 object-contain" />
+            <img src={logoImg} alt="FutecAI Logo" className="h-16 object-contain" />
             <h1 className="text-2xl font-bold tracking-tight text-primary">
               Book Inventory
             </h1>

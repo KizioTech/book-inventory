@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+
 import {
   Select,
   SelectContent,
@@ -25,6 +25,7 @@ import { RecoveryDialog } from "@/components/RecoveryDialog";
 import { BookDetailSheet, BookDetail } from "@/components/BookDetailSheet";
 import { EditBookDialog } from "@/components/EditBookDialog";
 import { searchMetadataByTitle, type BookMeta } from "@/lib/book-metadata";
+import logoImg from "@/assets/blue-logo.png";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,7 +53,8 @@ const empty = {
   year: "",
   quantity: 1,
   condition: "Good" as "Good" | "Fair" | "Poor",
-  notes: "",
+  category: "",
+  shelf_location: "",
 };
 
 function ScanPage() {
@@ -77,7 +79,7 @@ function ScanPage() {
 
   // Alert dialogs
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [fuzzyWarning, setFuzzyWarning] = useState<{ similar: { id: string; title: string | null; quantity: number }[]; payload: BookFormValues } | null>(null);
+
 
   const [scanCount, setScanCount] = useState<number>(() =>
     parseInt(sessionStorage.getItem("scanCount") ?? "0", 10)
@@ -108,7 +110,7 @@ function ScanPage() {
     const { data } = await supabase
       .from("books")
       .select(
-        "id, isbn, title, author, publisher, year, quantity, condition, notes, created_at",
+        "id, isbn, title, author, publisher, year, quantity, condition, category, shelf_location, created_at",
       )
       .eq("school_id", sid)
       .eq("clerk_id", user.id)
@@ -203,43 +205,43 @@ function ScanPage() {
     return () => abortRef.current?.abort();
   }, []);
 
-  const save = async (forceDuplicate = false) => {
+  const save = async () => {
     if (!user || !schoolId) return;
-    
+
     const trimmedIsbn = form.isbn?.trim();
-    if (!trimmedIsbn && !form.title?.trim()) {
-      toast.error("Enter an ISBN or a title");
+    const trimmedTitle = form.title?.trim();
+    const trimmedAuthor = form.author?.trim();
+    const trimmedPublisher = form.publisher?.trim();
+    const trimmedYear = form.year?.trim();
+    const qty = Number(form.quantity);
+
+    const missing: string[] = [];
+    if (!trimmedIsbn) missing.push("ISBN");
+    if (!trimmedTitle) missing.push("Title");
+    if (!trimmedAuthor) missing.push("Author");
+    if (!trimmedPublisher) missing.push("Publisher");
+    if (!trimmedYear) missing.push("Year");
+    if (!qty || qty < 1) missing.push("Quantity");
+
+    if (missing.length > 0) {
+      toast.error(`Please fill in: ${missing.join(", ")}`);
       return;
     }
 
     const payload: BookFormValues = {
       id: crypto.randomUUID(), // Client generated ID
-      isbn: trimmedIsbn || null,
-      title: form.title?.trim() || null,
-      author: form.author?.trim() || null,
-      publisher: form.publisher?.trim() || null,
-      year: form.year?.trim() || null,
-      quantity: Number(form.quantity) || 1,
+      isbn: trimmedIsbn,
+      title: trimmedTitle,
+      author: trimmedAuthor,
+      publisher: trimmedPublisher,
+      year: trimmedYear,
+      quantity: qty,
       condition: form.condition,
-      notes: form.notes?.trim() || null,
+      category: form.category?.trim() || null,
+      shelf_location: form.shelf_location?.trim() || null,
       school_id: schoolId,
       clerk_id: user.id,
     };
-
-    // Fuzzy duplicate warning (No ISBN)
-    if (!trimmedIsbn && form.title?.trim() && !forceDuplicate) {
-      const { data: similar } = await supabase
-        .from("books")
-        .select("id, title, quantity")
-        .eq("school_id", schoolId)
-        .ilike("title", `%${form.title.trim()}%`)
-        .limit(3);
-
-      if (similar?.length) {
-        setFuzzyWarning({ similar, payload });
-        return;
-      }
-    }
 
     setSaving(true);
 
@@ -286,7 +288,7 @@ function ScanPage() {
 
     setSaving(false);
     incrementCount();
-    setLastScanned(`${payload.title || 'Untitled'} (×${payload.quantity})`);
+    setLastScanned(`${payload.title} (×${payload.quantity})`);
     
     setForm({ ...empty });
     setPaused(false);
@@ -337,7 +339,8 @@ function ScanPage() {
         year: r.year,
         quantity: r.quantity,
         condition: r.condition,
-        notes: r.notes,
+        category: r.category,
+        shelf_location: r.shelf_location,
         recorded_at: r.created_at,
       })),
     );
@@ -362,7 +365,7 @@ function ScanPage() {
         <Card className="w-full max-w-md">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <img src="/blue-logo.png" alt="Logo" className="h-5 w-auto object-contain" />
+              <img src={logoImg} alt="Logo" className="h-5 w-auto object-contain" />
               <CardTitle>Welcome, {profile?.full_name ?? "Clerk"}</CardTitle>
             </div>
           </CardHeader>
@@ -462,7 +465,9 @@ function ScanPage() {
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 space-y-1.5">
-              <Label>ISBN</Label>
+              <Label>
+                ISBN <span className="text-red-500">*</span>
+              </Label>
               <div className="flex gap-2">
                 <Input
                   value={form.isbn}
@@ -488,7 +493,9 @@ function ScanPage() {
               </div>
             </div>
             <div className="col-span-2 space-y-1.5 relative">
-              <Label>Title</Label>
+              <Label>
+                Title <span className="text-red-500">*</span>
+              </Label>
               <Input
                 value={form.title}
                 onChange={(e) => handleTitleChange(e.target.value)}
@@ -515,14 +522,18 @@ function ScanPage() {
               )}
             </div>
             <div className="col-span-2 space-y-1.5">
-              <Label>Author(s)</Label>
+              <Label>
+                Author(s) <span className="text-red-500">*</span>
+              </Label>
               <Input
                 value={form.author}
                 onChange={(e) => setForm({ ...form, author: e.target.value })}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Publisher</Label>
+              <Label>
+                Publisher <span className="text-red-500">*</span>
+              </Label>
               <Input
                 value={form.publisher}
                 onChange={(e) =>
@@ -531,7 +542,9 @@ function ScanPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Year</Label>
+              <Label>
+                Year <span className="text-red-500">*</span>
+              </Label>
               <Input
                 value={form.year}
                 onChange={(e) => setForm({ ...form, year: e.target.value })}
@@ -539,7 +552,9 @@ function ScanPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Quantity</Label>
+              <Label>
+                Quantity <span className="text-red-500">*</span>
+              </Label>
               <Input
                 type="number"
                 min={1}
@@ -567,12 +582,23 @@ function ScanPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1.5">
+              <Label>
+                Category <span className="text-slate-400 font-normal">(optional)</span>
+              </Label>
+              <Input
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+              />
+            </div>
             <div className="col-span-2 space-y-1.5">
-              <Label>Notes</Label>
-              <Textarea
-                rows={2}
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              <Label>
+                Shelf Location{" "}
+                <span className="text-slate-400 font-normal">(optional)</span>
+              </Label>
+              <Input
+                value={form.shelf_location}
+                onChange={(e) => setForm({ ...form, shelf_location: e.target.value })}
               />
             </div>
           </div>
@@ -700,34 +726,7 @@ function ScanPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Fuzzy Duplicate Warning Dialog */}
-      <AlertDialog open={!!fuzzyWarning} onOpenChange={(o) => { if (!o) setFuzzyWarning(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Similar books found</AlertDialogTitle>
-            <AlertDialogDescription>
-              <p className="mb-2">Found similar books in this school:</p>
-              <ul className="list-disc pl-5 mb-4 space-y-1 text-slate-700">
-                {fuzzyWarning?.similar.map(s => (
-                  <li key={s.id}>{s.title} (Qty: {s.quantity})</li>
-                ))}
-              </ul>
-              Do you want to continue creating a new record?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setFuzzyWarning(null);
-                save(true);
-              }}
-            >
-              Continue
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+
 
       <RecoveryDialog 
         data={recoveryData} 

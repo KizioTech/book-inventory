@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
+import logoImg from "@/assets/blue-logo.png";
 
 export const Route = createFileRoute("/reset-password")({
   head: () => ({
@@ -99,7 +100,7 @@ function ResetPasswordPage() {
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center gap-2">
           <img
-            src="/blue-logo.png"
+            src={logoImg}
             alt="Logo"
             className="h-14 object-contain"
           />

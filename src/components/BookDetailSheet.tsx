@@ -10,7 +10,8 @@ export interface BookDetail {
   year: string | null;
   quantity: number;
   condition: string | null;
-  notes: string | null;
+  category: string | null;
+  shelf_location: string | null;
   created_at: string;
 }
 
@@ -37,8 +38,9 @@ export function BookDetailSheet({ book, onClose, onEdit }: Props) {
           <Detail label="Year"        value={book.year} />
           <Detail label="Quantity"    value={book.quantity} />
           <Detail label="Condition"   value={book.condition} />
+          <Detail label="Category"    value={book.category} />
           <div className="col-span-2 mt-2">
-            <Detail label="Notes"       value={book.notes} />
+            <Detail label="Shelf Location" value={book.shelf_location} />
           </div>
         </dl>
         <Button className="mt-6 w-full" onClick={() => onEdit(book)}>

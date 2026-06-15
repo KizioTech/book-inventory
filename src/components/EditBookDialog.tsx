@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+
 import {
   Select,
   SelectContent,
@@ -44,7 +44,8 @@ export function EditBookDialog({ book, onClose, onSaved }: Props) {
       year: form.year?.trim() || null,
       quantity: Number(form.quantity) || 1,
       condition: form.condition,
-      notes: form.notes?.trim() || null,
+      category: form.category?.trim() || null,
+      shelf_location: form.shelf_location?.trim() || null,
     };
 
     const { error } = await supabase
@@ -133,12 +134,18 @@ export function EditBookDialog({ book, onClose, onSaved }: Props) {
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1.5">
+            <Label>Category</Label>
+            <Input
+              value={form.category || ""}
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
+            />
+          </div>
           <div className="col-span-2 space-y-1.5">
-            <Label>Notes</Label>
-            <Textarea
-              rows={2}
-              value={form.notes || ""}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            <Label>Shelf Location</Label>
+            <Input
+              value={form.shelf_location || ""}
+              onChange={(e) => setForm({ ...form, shelf_location: e.target.value })}
             />
           </div>
         </div>

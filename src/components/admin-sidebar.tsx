@@ -13,6 +13,7 @@ import {
   Database,
 } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
+import logoImg from "@/assets/blue-logo.png";
 
 export type AdminTab = "schools" | "users" | "records" | "export" | "metadata";
 
@@ -70,7 +71,7 @@ function SidebarBody({ active, onChange, fullName, role, onSignOut }: Props) {
   return (
     <div className="flex h-full w-64 flex-col border-r border-slate-200 bg-white p-4">
       <div className="mb-6 flex items-center gap-2 px-2">
-        <img src="/blue-logo.png" alt="Logo" className="h-5 w-auto object-contain" />
+        <img src={logoImg} alt="Logo" className="h-5 w-auto object-contain" />
         <span className="font-bold text-lg text-blue-600">Book Inventory</span>
       </div>
       <NavList active={active} onChange={onChange} />
@@ -139,7 +140,7 @@ export function AdminSidebar(props: Props) {
           <Menu size={20} />
         </button>
         <div className="flex items-center gap-2">
-          <img src="/blue-logo.png" alt="Logo" className="h-4 w-auto object-contain" />
+          <img src={logoImg} alt="Logo" className="h-4 w-auto object-contain" />
           <span className="text-sm font-semibold text-blue-600">Book Inventory</span>
         </div>
         <span className="text-xs text-slate-500 truncate max-w-[100px]">
