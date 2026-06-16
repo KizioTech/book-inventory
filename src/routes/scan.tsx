@@ -298,6 +298,7 @@ function ScanPage() {
     setLastScanned(`${payload.title} (×${payload.quantity})`);
     
     setForm({ ...empty });
+    setStep("scan");
     setPaused(false);
   };
 
