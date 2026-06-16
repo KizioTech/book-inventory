@@ -71,6 +71,7 @@ function ScanPage() {
   const [paused, setPaused] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
+  const [step, setStep] = useState<"scan" | "details">("scan");
 
   // Metadata search
   const [titleSuggestions, setTitleSuggestions] = useState<BookMeta[]>([]);
