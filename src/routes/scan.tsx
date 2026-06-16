@@ -71,6 +71,7 @@ function ScanPage() {
   const [paused, setPaused] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
+  const [step, setStep] = useState<"scan" | "details">("scan");
 
   // Metadata search
   const [titleSuggestions, setTitleSuggestions] = useState<BookMeta[]>([]);
@@ -174,10 +175,12 @@ function ScanPage() {
       
       if (meta && (meta.title || meta.author)) {
         setForm((f) => ({ ...f, ...meta, isbn: code }));
+        setStep("details");
         toast.success(meta.title || "Book details loaded", { id: loadingToast });
       } else {
         toast.warning("No metadata found — please fill in manually", { id: loadingToast });
         setForm((f) => ({ ...f, isbn: code }));
+        setStep("details");
       }
     } catch (error) {
       console.error('Lookup error:', error);
@@ -295,6 +298,7 @@ function ScanPage() {
     setLastScanned(`${payload.title} (×${payload.quantity})`);
     
     setForm({ ...empty });
+    setStep("scan");
     setPaused(false);
   };
 
@@ -440,183 +444,188 @@ function ScanPage() {
         </div>
       </header>
 
-      <section className="mb-4">
-        {lastScanned && (
-          <div className="mb-2 rounded-md bg-green-50 px-3 py-1.5 text-xs text-green-700 flex items-center justify-between">
-            <span className="truncate">✓ Last saved: {lastScanned}</span>
-            <span className="shrink-0 ml-2 text-green-600/70">{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-          </div>
-        )}
-        <BarcodeScanner onDetected={handleDetected} paused={paused} />
-        <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-          <span>Point camera at the barcode</span>
-          {paused && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setPaused(false)}
-            >
-              Resume camera
-            </Button>
+      {step === "scan" && (
+        <section className="mb-4">
+          {lastScanned && (
+            <div className="mb-2 rounded-md bg-green-50 px-3 py-1.5 text-xs text-green-700 flex items-center justify-between">
+              <span className="truncate">✓ Last saved: {lastScanned}</span>
+              <span className="shrink-0 ml-2 text-green-600/70">{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+            </div>
           )}
-        </div>
-      </section>
+          <BarcodeScanner onDetected={handleDetected} paused={paused} />
+          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+            <span>Point camera at the barcode</span>
+            {paused && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPaused(false)}
+              >
+                Resume camera
+              </Button>
+            )}
+          </div>
+        </section>
+      )}
 
-      <Card className="mb-4">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Book details</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 space-y-1.5">
-              <Label>
-                ISBN <span className="text-red-500">*</span>
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  value={form.isbn}
-                  onChange={(e) => setForm({ ...form, isbn: e.target.value })}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      performLookup(form.isbn);
-                    }
-                  }}
-                  placeholder="13-digit barcode"
-                  inputMode="numeric"
-                />
-                <Button 
-                  variant="secondary"
-                  type="button"
-                  onClick={() => performLookup(form.isbn)}
-                  disabled={!form.isbn || isLookingUp}
-                >
-                  <Search className="mr-1 h-4 w-4" />
-                  {isLookingUp ? "Looking up..." : "Lookup"}
-                </Button>
+      {step === "scan" ? (
+        <Card className="mb-4">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Book details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-1.5">
+                <Label>
+                  ISBN <span className="text-red-500">*</span>
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={form.isbn}
+                    onChange={(e) => setForm({ ...form, isbn: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        performLookup(form.isbn);
+                      }
+                    }}
+                    placeholder="13-digit barcode"
+                    inputMode="numeric"
+                  />
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    onClick={() => performLookup(form.isbn)}
+                    disabled={!form.isbn || isLookingUp}
+                  >
+                    <Search className="mr-1 h-4 w-4" />
+                    {isLookingUp ? "Looking up..." : "Lookup"}
+                  </Button>
+                </div>
+              </div>
+              <div className="col-span-2 text-xs text-muted-foreground">
+                Scan a barcode or enter an ISBN — once found, you'll be taken to a quick details page.
               </div>
             </div>
-            <div className="col-span-2 space-y-1.5 relative">
-              <Label>
-                Title <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                value={form.title}
-                onChange={(e) => handleTitleChange(e.target.value)}
-                autoComplete="off"
-              />
-              {titleSuggestions.length > 0 && (
-                <ul className="absolute z-20 w-full mt-1 rounded-xl border border-slate-200 bg-white shadow-lg text-sm overflow-hidden">
-                  {titleSuggestions.map((s, i) => (
-                    <li
-                      key={i}
-                      className="px-4 py-2 cursor-pointer hover:bg-slate-50"
-                      onClick={() => {
-                        setForm((f) => ({ ...f, ...s, isbn: s.isbn || f.isbn }));
-                        setTitleSuggestions([]);
-                      }}
-                    >
-                      <span className="font-medium">{s.title}</span>
-                      {s.author && (
-                        <span className="ml-2 text-slate-400">{s.author}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="mb-4">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">Finalize book</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setStep("scan"); setPaused(false); }}
+            >
+              ← Back
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Metadata summary so user can verify the hit */}
+            <div className="rounded-lg border bg-secondary/40 p-3 text-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="font-semibold text-foreground truncate">
+                    {form.title || <span className="text-muted-foreground italic">No title</span>}
+                  </div>
+                  {form.author && (
+                    <div className="text-xs text-muted-foreground truncate">by {form.author}</div>
+                  )}
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {[form.publisher, form.year].filter(Boolean).join(" · ") || "—"}
+                  </div>
+                  <div className="mt-0.5 text-xs font-mono text-muted-foreground">ISBN: {form.isbn || "—"}</div>
+                </div>
+              </div>
+              <div className="mt-2 flex items-center gap-1 text-xs text-amber-700">
+                <Info className="h-3 w-3" />
+                <span>Wrong book?</span>
+                <button
+                  type="button"
+                  className="underline font-medium"
+                  onClick={() => { setStep("scan"); setPaused(false); }}
+                >
+                  Re-scan or edit
+                </button>
+              </div>
             </div>
-            <div className="col-span-2 space-y-1.5">
-              <Label>
-                Author(s) <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                value={form.author}
-                onChange={(e) => setForm({ ...form, author: e.target.value })}
-              />
+
+            {/* Editable summary fields (collapsible-style inline edit) */}
+            <details className="rounded-md border px-3 py-2 text-sm">
+              <summary className="cursor-pointer text-muted-foreground">Edit title / author / publisher / year</summary>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="col-span-2 space-y-1.5">
+                  <Label>Title <span className="text-red-500">*</span></Label>
+                  <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                </div>
+                <div className="col-span-2 space-y-1.5">
+                  <Label>Author(s) <span className="text-red-500">*</span></Label>
+                  <Input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Publisher <span className="text-red-500">*</span></Label>
+                  <Input value={form.publisher} onChange={(e) => setForm({ ...form, publisher: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Year <span className="text-red-500">*</span></Label>
+                  <Input value={form.year} onChange={(e) => setForm({ ...form, year: e.target.value })} inputMode="numeric" />
+                </div>
+              </div>
+            </details>
+
+            {/* Quick-entry fields */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Quantity <span className="text-red-500">*</span></Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={form.quantity}
+                  onChange={(e) =>
+                    setForm({ ...form, quantity: e.target.value === "" ? ("" as unknown as number) : Number(e.target.value) })
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Condition</Label>
+                <Select
+                  value={form.condition}
+                  onValueChange={(v) => setForm({ ...form, condition: v as typeof form.condition })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Good">Good</SelectItem>
+                    <SelectItem value="Fair">Fair</SelectItem>
+                    <SelectItem value="Poor">Poor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Category <span className="text-slate-400 font-normal">(optional)</span></Label>
+                <Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Shelf <span className="text-slate-400 font-normal">(optional)</span></Label>
+                <Input value={form.shelf_location} onChange={(e) => setForm({ ...form, shelf_location: e.target.value })} />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>
-                Publisher <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                value={form.publisher}
-                onChange={(e) =>
-                  setForm({ ...form, publisher: e.target.value })
-                }
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>
-                Year <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                value={form.year}
-                onChange={(e) => setForm({ ...form, year: e.target.value })}
-                inputMode="numeric"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>
-                Quantity <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                type="number"
-                min={1}
-                value={form.quantity}
-                onChange={(e) =>
-                  setForm({ ...form, quantity: e.target.value === "" ? ("" as unknown as number) : Number(e.target.value) })
-                }
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Condition</Label>
-              <Select
-                value={form.condition}
-                onValueChange={(v) =>
-                  setForm({ ...form, condition: v as typeof form.condition })
-                }
+
+            <div className="flex gap-2">
+              <Button onClick={() => save()} disabled={saving} className="flex-1">
+                <Save className="mr-1 h-4 w-4" />
+                {saving ? "Saving…" : "Save & scan next"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => { setForm({ ...empty }); setStep("scan"); setPaused(false); }}
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Good">Good</SelectItem>
-                  <SelectItem value="Fair">Fair</SelectItem>
-                  <SelectItem value="Poor">Poor</SelectItem>
-                </SelectContent>
-              </Select>
+                Clear
+              </Button>
             </div>
-            <div className="space-y-1.5">
-              <Label>
-                Category <span className="text-slate-400 font-normal">(optional)</span>
-              </Label>
-              <Input
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
-              />
-            </div>
-            <div className="col-span-2 space-y-1.5">
-              <Label>
-                Shelf Location{" "}
-                <span className="text-slate-400 font-normal">(optional)</span>
-              </Label>
-              <Input
-                value={form.shelf_location}
-                onChange={(e) => setForm({ ...form, shelf_location: e.target.value })}
-              />
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={() => save()} disabled={saving} className="flex-1">
-              <Save className="mr-1 h-4 w-4" />
-              {saving ? "Saving…" : "Save book"}
-            </Button>
-            <Button variant="outline" onClick={() => setForm({ ...empty })}>
-              Clear
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
