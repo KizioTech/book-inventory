@@ -80,6 +80,10 @@ function ScanPage() {
   // Alert dialogs
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
+  // Session search
+  const [recordSearch, setRecordSearch] = useState("");
+
+
 
   const [scanCount, setScanCount] = useState<number>(() =>
     parseInt(sessionStorage.getItem("scanCount") ?? "0", 10)
@@ -625,11 +629,43 @@ function ScanPage() {
           </Button>
         </CardHeader>
         <CardContent className="px-0">
-          {records.length === 0 ? (
-            <p className="px-6 py-4 text-sm text-muted-foreground">
-              No records yet.
-            </p>
-          ) : (
+          {records.length > 0 && (
+            <div className="px-3 pb-2">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={recordSearch}
+                  onChange={(e) => setRecordSearch(e.target.value)}
+                  placeholder="Search by title, author, or ISBN…"
+                  className="pl-8 h-9"
+                />
+              </div>
+            </div>
+          )}
+          {(() => {
+            const q = recordSearch.trim().toLowerCase();
+            const filtered = q
+              ? records.filter((r) =>
+                  [r.title, r.author, r.isbn]
+                    .some((v) => v?.toLowerCase().includes(q)),
+                )
+              : records;
+            if (records.length === 0) {
+              return (
+                <p className="px-6 py-4 text-sm text-muted-foreground">
+                  No records yet.
+                </p>
+              );
+            }
+            if (filtered.length === 0) {
+              return (
+                <p className="px-6 py-4 text-sm text-muted-foreground">
+                  No records match "{recordSearch}".
+                </p>
+              );
+            }
+            return (
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase text-muted-foreground">
@@ -641,7 +677,7 @@ function ScanPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {records.map((r) => (
+                  {filtered.map((r) => (
                     <tr 
                       key={r.id} 
                       className="border-t cursor-pointer hover:bg-slate-50 transition-colors"
@@ -689,7 +725,9 @@ function ScanPage() {
                 </tbody>
               </table>
             </div>
-          )}
+            );
+          })()}
+
         </CardContent>
       </Card>
 
