@@ -80,6 +80,10 @@ function ScanPage() {
   // Alert dialogs
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
+  // Session search
+  const [recordSearch, setRecordSearch] = useState("");
+
+
 
   const [scanCount, setScanCount] = useState<number>(() =>
     parseInt(sessionStorage.getItem("scanCount") ?? "0", 10)
