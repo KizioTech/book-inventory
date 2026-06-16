@@ -1446,6 +1446,7 @@ function ExportTab() {
   const { data: estimate = 0, isLoading: l2 } = useBooksCountQuery({
     schoolId: schoolId === "all" ? undefined : schoolId,
     range,
+    countType: "rows",
   });
 
   const applyFilters = <T extends object>(q: T): T => {
@@ -1657,7 +1658,7 @@ function MetadataTab() {
       }
 
       if (ev.data.type === 'batch') {
-        const { error } = await supabase.from('book_metadata').upsert(ev.data.batch, { onConflict: 'isbn', ignoreDuplicates: true });
+        const { error } = await supabase.from('book_metadata').upsert(ev.data.batch, { onConflict: 'isbn' });
         if (error) console.error("Batch error:", error);
         setProgress(Math.round(ev.data.progress * 100));
       } else if (ev.data.type === 'done') {
@@ -1703,7 +1704,7 @@ function MetadataTab() {
           <code className="text-xs bg-slate-100 px-1 rounded">
             book_title, author, isbn, publisher, year_published, category_name
           </code>
-          . Existing ISBN matches are skipped.
+          . Existing ISBN matches will be updated.
         </p>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-3 cursor-pointer">

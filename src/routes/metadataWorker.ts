@@ -1,11 +1,9 @@
-import { supabase } from "@/integrations/supabase/client";
-
 self.onmessage = async (e: MessageEvent<{ file: File; batchSize: number }>) => {
   const { file, batchSize = 50 } = e.data;
   
   try {
     const text = await file.text();
-    const lines = text.split('\n').filter(Boolean);
+    const lines = text.split(/\r?\n/).filter(Boolean);
     if (lines.length < 2) {
       self.postMessage({ type: 'done', total: 0 });
       return;
@@ -18,9 +16,10 @@ self.onmessage = async (e: MessageEvent<{ file: File; batchSize: number }>) => {
       const batch = rows.slice(i, i + batchSize).map(row => {
         const cols = row.split(',').map(v => v.trim().replace(/^"|"$/g, ""));
         const idx = (name: string) => headers.indexOf(name);
-        const isbn = cols[idx("isbn")]?.replace(/[^0-9Xx]/g, "") || null;
+        const rawIsbn = cols[idx("isbn")]?.trim()?.replace(/[^0-9Xx]/g, "");
+        const isbn = rawIsbn ? rawIsbn : null;
         return {
-          isbn:      isbn || null,
+          isbn,
           title:     cols[idx("book_title")]     || "",
           author:    cols[idx("author")]         || null,
           publisher: cols[idx("publisher")]      || null,

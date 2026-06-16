@@ -8,14 +8,11 @@ RETURNS TABLE(
 ) AS $$
   SELECT
     s.id AS school_id,
-    COALESCE(SUM(b.quantity), 0)   AS total_books,
-    COUNT(DISTINCT cs.clerk_id)     AS clerk_count,
-    MAX(b.created_at)               AS last_entry
+    COALESCE((SELECT SUM(b.quantity) FROM books b WHERE b.school_id = s.id), 0) AS total_books,
+    (SELECT COUNT(*) FROM clerk_schools cs WHERE cs.school_id = s.id) AS clerk_count,
+    (SELECT MAX(b.created_at) FROM books b WHERE b.school_id = s.id) AS last_entry
   FROM schools s
-  LEFT JOIN books b         ON b.school_id = s.id
-  LEFT JOIN clerk_schools cs ON cs.school_id = s.id
-  WHERE s.active = true
-  GROUP BY s.id;
+  WHERE s.active = true;
 $$ LANGUAGE sql STABLE;
 
 -- 2. Create composite indexes

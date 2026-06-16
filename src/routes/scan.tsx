@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, LogOut, MapPin, Save, Trash2, Download, Search, Info } from "lucide-react";
+import { BookOpen, LogOut, MapPin, Save, Trash2, Download, Search, Info, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,6 +94,7 @@ function ScanPage() {
   const [recoveryData, setRecoveryData] = useState<BookFormValues | null>(null);
   const [detailBook, setDetailBook] = useState<BookRow | null>(null);
   const [editTarget, setEditTarget] = useState<BookRow | null>(null);
+  const [recordsExpanded, setRecordsExpanded] = useState(false);
 
   const incrementCount = () => {
     const next = scanCount + 1;
@@ -223,7 +224,6 @@ function ScanPage() {
     const qty = Number(form.quantity);
 
     const missing: string[] = [];
-    if (!trimmedIsbn) missing.push("ISBN");
     if (!trimmedTitle) missing.push("Title");
     if (!trimmedAuthor) missing.push("Author");
     if (!trimmedPublisher) missing.push("Publisher");
@@ -465,6 +465,13 @@ function ScanPage() {
               </Button>
             )}
           </div>
+          <Button 
+            variant="secondary" 
+            className="w-full mt-3" 
+            onClick={() => { setStep("details"); setPaused(true); }}
+          >
+            Add book manually
+          </Button>
         </section>
       )}
 
@@ -553,11 +560,42 @@ function ScanPage() {
 
             {/* Editable summary fields (collapsible-style inline edit) */}
             <details className="rounded-md border px-3 py-2 text-sm">
-              <summary className="cursor-pointer text-muted-foreground">Edit title / author / publisher / year</summary>
+              <summary className="cursor-pointer text-muted-foreground">Edit details manually</summary>
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <div className="col-span-2 space-y-1.5">
+                  <Label>ISBN <span className="text-slate-400 font-normal">(optional if no barcode)</span></Label>
+                  <Input value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} placeholder="13-digit barcode" inputMode="numeric" />
+                </div>
+                <div className="col-span-2 space-y-1.5">
                   <Label>Title <span className="text-red-500">*</span></Label>
-                  <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                  <div className="relative">
+                    <Input value={form.title} onChange={(e) => handleTitleChange(e.target.value)} />
+                    {titleSuggestions.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 rounded-md border border-slate-200 bg-white shadow-lg overflow-hidden">
+                        {titleSuggestions.map((s, i) => (
+                          <div
+                            key={i}
+                            className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 border-b last:border-0 border-slate-100"
+                            onClick={() => {
+                              setForm(f => ({
+                                ...f,
+                                title: s.title || "",
+                                author: s.author || f.author,
+                                publisher: s.publisher || f.publisher,
+                                year: s.year || f.year,
+                                isbn: s.isbn || f.isbn,
+                                category: s.category || f.category
+                              }));
+                              setTitleSuggestions([]);
+                            }}
+                          >
+                            <div className="font-medium truncate">{s.title}</div>
+                            <div className="text-xs text-slate-500 truncate">{s.author} • {s.year}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="col-span-2 space-y-1.5">
                   <Label>Author(s) <span className="text-red-500">*</span></Label>
@@ -628,16 +666,23 @@ function ScanPage() {
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-base">
+        <CardHeader 
+          className="flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer hover:bg-slate-50 transition-colors rounded-t-xl"
+          onClick={() => setRecordsExpanded(!recordsExpanded)}
+        >
+          <CardTitle className="text-base flex items-center gap-2">
             Session records <Badge variant="secondary">{records.length}</Badge>
+            {recordsExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
           </CardTitle>
-          <Button variant="outline" size="sm" onClick={exportCsv}>
-            <Download className="mr-1 h-4 w-4" />
-            CSV
-          </Button>
+          <div onClick={(e) => e.stopPropagation()}>
+            <Button variant="outline" size="sm" onClick={exportCsv}>
+              <Download className="mr-1 h-4 w-4" />
+              CSV
+            </Button>
+          </div>
         </CardHeader>
-        <CardContent className="px-0">
+        {recordsExpanded && (
+        <CardContent className="px-0 pt-2">
           {records.length > 0 && (
             <div className="px-3 pb-2">
               <div className="relative">
@@ -738,6 +783,7 @@ function ScanPage() {
           })()}
 
         </CardContent>
+        )}
       </Card>
 
       <BookDetailSheet 

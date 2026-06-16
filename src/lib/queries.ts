@@ -198,11 +198,12 @@ export function useBooksQuery(filters: BookFilters, page: number, pageSize: numb
 }
 
 // Used for "Today" books count or general quick counts
-export function useBooksCountQuery(filters: { since?: string; schoolId?: string; range?: string }) {
+export function useBooksCountQuery(filters: { since?: string; schoolId?: string; range?: string; countType?: 'rows' | 'sum' }) {
   return useQuery({
     queryKey: ["books_count", filters],
     queryFn: async () => {
-      let q = supabase.from("books").select("id", { count: "exact", head: true });
+      const type = filters.countType || 'sum';
+      let q = supabase.from("books").select(type === 'sum' ? "quantity" : "id", type === 'sum' ? undefined : { count: "exact", head: true });
       
       if (filters.schoolId && filters.schoolId !== "all") {
         q = q.eq("school_id", filters.schoolId);
@@ -218,9 +219,14 @@ export function useBooksCountQuery(filters: { since?: string; schoolId?: string;
         q = q.gte("created_at", since.toISOString());
       }
       
-      const { count, error } = await q;
+      const { data, count, error } = await q;
       if (error) throw error;
-      return count ?? 0;
+      
+      if (type === 'sum') {
+        return (data || []).reduce((sum, row) => sum + (Number((row as any).quantity) || 0), 0);
+      } else {
+        return count ?? 0;
+      }
     },
     staleTime: 30_000,
   });
