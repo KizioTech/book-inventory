@@ -274,13 +274,13 @@ function ScanPage() {
           // If the book has an ISBN, skip if it's already in the pool
           if (payload.isbn) {
             const { data: existing } = await supabase
-              .from("book_metadata")
+              .from("book_metadata" as any)
               .select("id")
               .eq("isbn", payload.isbn)
               .maybeSingle();
             if (existing) return; // Already known — nothing to do
           }
-          await supabase.from("book_metadata").upsert({
+          await supabase.from("book_metadata" as any).upsert({
             isbn:      payload.isbn,
             title:     payload.title || "",
             author:    payload.author,
