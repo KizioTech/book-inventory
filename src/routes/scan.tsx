@@ -677,7 +677,7 @@ function ScanPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {records.map((r) => (
+                  {filtered.map((r) => (
                     <tr 
                       key={r.id} 
                       className="border-t cursor-pointer hover:bg-slate-50 transition-colors"
@@ -725,7 +725,9 @@ function ScanPage() {
                 </tbody>
               </table>
             </div>
-          )}
+            );
+          })()}
+
         </CardContent>
       </Card>
 
