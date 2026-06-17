@@ -557,10 +557,10 @@ function ScanPage() {
               </div>
             </div>
 
-            {/* Editable summary fields (collapsible-style inline edit) */}
-            <details className="rounded-md border px-3 py-2 text-sm">
-              <summary className="cursor-pointer text-muted-foreground">Edit details manually</summary>
-              <div className="mt-3 grid grid-cols-2 gap-3">
+            {/* Editable summary fields — always visible so wrong matches can be fixed */}
+            <div className="rounded-md border px-3 py-3 text-sm">
+              <div className="mb-2 text-xs font-medium text-muted-foreground">Edit book details</div>
+              <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2 space-y-1.5">
                   <Label>ISBN <span className="text-slate-400 font-normal">(optional if no barcode)</span></Label>
                   <Input value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} placeholder="13-digit barcode" inputMode="numeric" />
@@ -568,13 +568,18 @@ function ScanPage() {
                 <div className="col-span-2 space-y-1.5">
                   <Label>Title <span className="text-red-500">*</span></Label>
                   <div className="relative">
-                    <Input value={form.title} onChange={(e) => handleTitleChange(e.target.value)} />
+                    <Input
+                      value={form.title}
+                      onChange={(e) => handleTitleChange(e.target.value)}
+                      onBlur={() => setTimeout(() => setTitleSuggestions([]), 150)}
+                    />
                     {titleSuggestions.length > 0 && (
                       <div className="absolute z-10 w-full mt-1 rounded-md border border-slate-200 bg-white shadow-lg overflow-hidden">
                         {titleSuggestions.map((s, i) => (
                           <div
                             key={i}
                             className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 border-b last:border-0 border-slate-100"
+                            onMouseDown={(e) => e.preventDefault()}
                             onClick={() => {
                               setForm(f => ({
                                 ...f,
@@ -609,7 +614,8 @@ function ScanPage() {
                   <Input value={form.year} onChange={(e) => setForm({ ...form, year: e.target.value })} inputMode="numeric" />
                 </div>
               </div>
-            </details>
+            </div>
+
 
             {/* Quick-entry fields */}
             <div className="grid grid-cols-2 gap-3">
