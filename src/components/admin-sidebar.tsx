@@ -7,11 +7,11 @@ import {
   Download,
   LogOut,
   Menu,
-  X,
   ScanLine,
   ShieldCheck,
   Database,
 } from "lucide-react";
+
 import { useNavigate } from "@tanstack/react-router";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import logoImg from "@/assets/blue-logo.png";
