@@ -14,6 +14,8 @@ export function BarcodeScanner({ onDetected, paused }: Props) {
   const lastCodeRef = useRef<{ code: string; ts: number }>({ code: "", ts: 0 });
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState(false);
+  const [flash, setFlash] = useState(false);
+
 
   useEffect(() => {
     if (paused) return;
