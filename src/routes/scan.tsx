@@ -173,12 +173,14 @@ function ScanPage() {
       
       if (meta && (meta.title || meta.author)) {
         setForm((f) => ({ ...f, ...meta, isbn: code }));
-        setStep("details");
+        setLookupHit(true);
+        setStep("review");
         toast.success(meta.title || "Book details loaded", { id: loadingToast });
       } else {
         toast.warning("No metadata found — please fill in manually", { id: loadingToast });
-        setForm((f) => ({ ...f, isbn: code }));
-        setStep("details");
+        setForm((f) => ({ ...empty, isbn: code }));
+        setLookupHit(false);
+        setStep("review");
       }
     } catch (error) {
       console.error('Lookup error:', error);
