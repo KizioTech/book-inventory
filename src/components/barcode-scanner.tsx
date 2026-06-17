@@ -41,7 +41,10 @@ export function BarcodeScanner({ onDetected, paused }: Props) {
               return;
             lastCodeRef.current = { code, ts: now };
             if (navigator.vibrate) navigator.vibrate(80);
+            setFlash(true);
+            setTimeout(() => setFlash(false), 350);
             onDetected(code);
+
           },
         );
         controlsRef.current = controls;
