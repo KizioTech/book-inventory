@@ -86,21 +86,17 @@ function ScanPage() {
 
 
 
-  const [scanCount, setScanCount] = useState<number>(() =>
-    parseInt(sessionStorage.getItem("scanCount") ?? "0", 10)
-  );
   const [lastScanned, setLastScanned] = useState<string | null>(null);
 
   const [recoveryData, setRecoveryData] = useState<BookFormValues | null>(null);
   const [detailBook, setDetailBook] = useState<BookRow | null>(null);
   const [editTarget, setEditTarget] = useState<BookRow | null>(null);
-  const [recordsExpanded, setRecordsExpanded] = useState(false);
+  const [recordsExpanded, setRecordsExpanded] = useState(true);
 
-  const incrementCount = () => {
-    const next = scanCount + 1;
-    setScanCount(next);
-    sessionStorage.setItem("scanCount", String(next));
-  };
+  // Derived counters from actual records (survives refresh, accounts for quantity)
+  const scanCount = records.length;
+  const totalBooks = records.reduce((sum, r) => sum + (r.quantity ?? 0), 0);
+
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
