@@ -431,7 +431,10 @@ function ScanPage() {
             <span className="truncate text-sm font-medium">
               {activeSchool?.name}
             </span>
-            <Badge variant="secondary" className="ml-2 font-mono">{scanCount}</Badge>
+            <Badge variant="secondary" className="ml-2 font-mono" title={`${scanCount} entries · ${totalBooks} books`}>
+              {scanCount}/{totalBooks}
+            </Badge>
+
           </div>
           <Button variant="ghost" size="sm" onClick={() => signOut()}>
             <LogOut className="mr-1 h-4 w-4" />
