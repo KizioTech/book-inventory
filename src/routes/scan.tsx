@@ -470,7 +470,7 @@ function ScanPage() {
           <Button 
             variant="secondary" 
             className="w-full mt-3" 
-            onClick={() => { setStep("details"); setPaused(true); }}
+            onClick={() => { setForm({ ...empty }); setLookupHit(false); setStep("review"); setPaused(true); }}
           >
             Add book manually
           </Button>
