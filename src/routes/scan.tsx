@@ -71,7 +71,8 @@ function ScanPage() {
   const [paused, setPaused] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
-  const [step, setStep] = useState<"scan" | "details">("scan");
+  const [step, setStep] = useState<"scan" | "review" | "specifics">("scan");
+  const [lookupHit, setLookupHit] = useState<boolean>(false);
 
   // Metadata search
   const [titleSuggestions, setTitleSuggestions] = useState<BookMeta[]>([]);
@@ -172,12 +173,14 @@ function ScanPage() {
       
       if (meta && (meta.title || meta.author)) {
         setForm((f) => ({ ...f, ...meta, isbn: code }));
-        setStep("details");
+        setLookupHit(true);
+        setStep("review");
         toast.success(meta.title || "Book details loaded", { id: loadingToast });
       } else {
         toast.warning("No metadata found — please fill in manually", { id: loadingToast });
-        setForm((f) => ({ ...f, isbn: code }));
-        setStep("details");
+        setForm((f) => ({ ...empty, isbn: code }));
+        setLookupHit(false);
+        setStep("review");
       }
     } catch (error) {
       console.error('Lookup error:', error);
@@ -467,7 +470,7 @@ function ScanPage() {
           <Button 
             variant="secondary" 
             className="w-full mt-3" 
-            onClick={() => { setStep("details"); setPaused(true); }}
+            onClick={() => { setForm({ ...empty }); setLookupHit(false); setStep("review"); setPaused(true); }}
           >
             Add book manually
           </Button>
@@ -515,10 +518,12 @@ function ScanPage() {
             </div>
           </CardContent>
         </Card>
-      ) : (
+      ) : step === "review" ? (
         <Card className="mb-4">
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">Finalize book</CardTitle>
+            <CardTitle className="text-base">
+              {lookupHit ? "Review book details" : "Enter book details"}
+            </CardTitle>
             <Button
               variant="ghost"
               size="sm"
@@ -528,96 +533,128 @@ function ScanPage() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Metadata summary so user can verify the hit */}
-            <div className="rounded-lg border bg-secondary/40 p-3 text-sm">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="font-semibold text-foreground truncate">
-                    {form.title || <span className="text-muted-foreground italic">No title</span>}
-                  </div>
-                  {form.author && (
-                    <div className="text-xs text-muted-foreground truncate">by {form.author}</div>
+            {lookupHit ? (
+              <div className="rounded-lg border bg-green-50 border-green-200 p-3 text-xs text-green-800 flex items-start gap-2">
+                <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>Match found. Review the details below and tap <strong>Next</strong> to add quantity, condition and shelf.</span>
+              </div>
+            ) : (
+              <div className="rounded-lg border bg-amber-50 border-amber-200 p-3 text-xs text-amber-800 flex items-start gap-2">
+                <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>No ISBN match. Please fill in the book details manually, then tap <strong>Next</strong>.</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-1.5">
+                <Label>ISBN <span className="text-slate-400 font-normal">(optional if no barcode)</span></Label>
+                <Input value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} placeholder="13-digit barcode" inputMode="numeric" />
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label>Title <span className="text-red-500">*</span></Label>
+                <div className="relative">
+                  <Input
+                    value={form.title}
+                    onChange={(e) => handleTitleChange(e.target.value)}
+                    onBlur={() => setTimeout(() => setTitleSuggestions([]), 150)}
+                  />
+                  {titleSuggestions.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 rounded-md border border-slate-200 bg-white shadow-lg overflow-hidden">
+                      {titleSuggestions.map((s, i) => (
+                        <div
+                          key={i}
+                          className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 border-b last:border-0 border-slate-100"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setForm(f => ({
+                              ...f,
+                              title: s.title || "",
+                              author: s.author || f.author,
+                              publisher: s.publisher || f.publisher,
+                              year: s.year || f.year,
+                              isbn: s.isbn || f.isbn,
+                              category: s.category || f.category
+                            }));
+                            setTitleSuggestions([]);
+                          }}
+                        >
+                          <div className="font-medium truncate">{s.title}</div>
+                          <div className="text-xs text-slate-500 truncate">{s.author} • {s.year}</div>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {[form.publisher, form.year].filter(Boolean).join(" · ") || "—"}
-                  </div>
-                  <div className="mt-0.5 text-xs font-mono text-muted-foreground">ISBN: {form.isbn || "—"}</div>
                 </div>
               </div>
-              <div className="mt-2 flex items-center gap-1 text-xs text-amber-700">
-                <Info className="h-3 w-3" />
-                <span>Wrong book?</span>
-                <button
-                  type="button"
-                  className="underline font-medium"
-                  onClick={() => { setStep("scan"); setPaused(false); }}
-                >
-                  Re-scan or edit
-                </button>
+              <div className="col-span-2 space-y-1.5">
+                <Label>Author(s) <span className="text-red-500">*</span></Label>
+                <Input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Publisher <span className="text-red-500">*</span></Label>
+                <Input value={form.publisher} onChange={(e) => setForm({ ...form, publisher: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Year <span className="text-red-500">*</span></Label>
+                <Input value={form.year} onChange={(e) => setForm({ ...form, year: e.target.value })} inputMode="numeric" />
               </div>
             </div>
 
-            {/* Editable summary fields — always visible so wrong matches can be fixed */}
-            <div className="rounded-md border px-3 py-3 text-sm">
-              <div className="mb-2 text-xs font-medium text-muted-foreground">Edit book details</div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 space-y-1.5">
-                  <Label>ISBN <span className="text-slate-400 font-normal">(optional if no barcode)</span></Label>
-                  <Input value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} placeholder="13-digit barcode" inputMode="numeric" />
-                </div>
-                <div className="col-span-2 space-y-1.5">
-                  <Label>Title <span className="text-red-500">*</span></Label>
-                  <div className="relative">
-                    <Input
-                      value={form.title}
-                      onChange={(e) => handleTitleChange(e.target.value)}
-                      onBlur={() => setTimeout(() => setTitleSuggestions([]), 150)}
-                    />
-                    {titleSuggestions.length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 rounded-md border border-slate-200 bg-white shadow-lg overflow-hidden">
-                        {titleSuggestions.map((s, i) => (
-                          <div
-                            key={i}
-                            className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 border-b last:border-0 border-slate-100"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => {
-                              setForm(f => ({
-                                ...f,
-                                title: s.title || "",
-                                author: s.author || f.author,
-                                publisher: s.publisher || f.publisher,
-                                year: s.year || f.year,
-                                isbn: s.isbn || f.isbn,
-                                category: s.category || f.category
-                              }));
-                              setTitleSuggestions([]);
-                            }}
-                          >
-                            <div className="font-medium truncate">{s.title}</div>
-                            <div className="text-xs text-slate-500 truncate">{s.author} • {s.year}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="col-span-2 space-y-1.5">
-                  <Label>Author(s) <span className="text-red-500">*</span></Label>
-                  <Input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Publisher <span className="text-red-500">*</span></Label>
-                  <Input value={form.publisher} onChange={(e) => setForm({ ...form, publisher: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Year <span className="text-red-500">*</span></Label>
-                  <Input value={form.year} onChange={(e) => setForm({ ...form, year: e.target.value })} inputMode="numeric" />
-                </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  const missing: string[] = [];
+                  if (!form.title?.trim()) missing.push("Title");
+                  if (!form.author?.trim()) missing.push("Author");
+                  if (!form.publisher?.trim()) missing.push("Publisher");
+                  if (!form.year?.trim()) missing.push("Year");
+                  if (missing.length > 0) {
+                    toast.error(`Please fill in: ${missing.join(", ")}`);
+                    return;
+                  }
+                  setStep("specifics");
+                }}
+                className="flex-1"
+              >
+                Next →
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => { setForm({ ...empty }); setStep("scan"); setPaused(false); }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="mb-4">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">Copy specifics</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setStep("review")}
+            >
+              ← Back
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Compact summary of the book being saved */}
+            <div className="rounded-lg border bg-secondary/40 p-3 text-sm">
+              <div className="font-semibold text-foreground truncate">
+                {form.title || <span className="text-muted-foreground italic">No title</span>}
               </div>
+              {form.author && (
+                <div className="text-xs text-muted-foreground truncate">by {form.author}</div>
+              )}
+              <div className="mt-1 text-xs text-muted-foreground">
+                {[form.publisher, form.year].filter(Boolean).join(" · ") || "—"}
+              </div>
+              <div className="mt-0.5 text-xs font-mono text-muted-foreground">ISBN: {form.isbn || "—"}</div>
             </div>
 
-
-            {/* Quick-entry fields */}
+            {/* Copy-specific fields */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Quantity <span className="text-red-500">*</span></Label>
