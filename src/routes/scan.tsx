@@ -86,21 +86,17 @@ function ScanPage() {
 
 
 
-  const [scanCount, setScanCount] = useState<number>(() =>
-    parseInt(sessionStorage.getItem("scanCount") ?? "0", 10)
-  );
   const [lastScanned, setLastScanned] = useState<string | null>(null);
 
   const [recoveryData, setRecoveryData] = useState<BookFormValues | null>(null);
   const [detailBook, setDetailBook] = useState<BookRow | null>(null);
   const [editTarget, setEditTarget] = useState<BookRow | null>(null);
-  const [recordsExpanded, setRecordsExpanded] = useState(false);
+  const [recordsExpanded, setRecordsExpanded] = useState(true);
 
-  const incrementCount = () => {
-    const next = scanCount + 1;
-    setScanCount(next);
-    sessionStorage.setItem("scanCount", String(next));
-  };
+  // Derived counters from actual records (survives refresh, accounts for quantity)
+  const scanCount = records.length;
+  const totalBooks = records.reduce((sum, r) => sum + (r.quantity ?? 0), 0);
+
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
@@ -294,8 +290,8 @@ function ScanPage() {
     }
 
     setSaving(false);
-    incrementCount();
     setLastScanned(`${payload.title} (×${payload.quantity})`);
+
     
     setForm({ ...empty });
     setStep("scan");
@@ -435,7 +431,10 @@ function ScanPage() {
             <span className="truncate text-sm font-medium">
               {activeSchool?.name}
             </span>
-            <Badge variant="secondary" className="ml-2 font-mono">{scanCount}</Badge>
+            <Badge variant="secondary" className="ml-2 font-mono" title={`${scanCount} entries · ${totalBooks} books`}>
+              {scanCount}/{totalBooks}
+            </Badge>
+
           </div>
           <Button variant="ghost" size="sm" onClick={() => signOut()}>
             <LogOut className="mr-1 h-4 w-4" />
@@ -558,10 +557,10 @@ function ScanPage() {
               </div>
             </div>
 
-            {/* Editable summary fields (collapsible-style inline edit) */}
-            <details className="rounded-md border px-3 py-2 text-sm">
-              <summary className="cursor-pointer text-muted-foreground">Edit details manually</summary>
-              <div className="mt-3 grid grid-cols-2 gap-3">
+            {/* Editable summary fields — always visible so wrong matches can be fixed */}
+            <div className="rounded-md border px-3 py-3 text-sm">
+              <div className="mb-2 text-xs font-medium text-muted-foreground">Edit book details</div>
+              <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2 space-y-1.5">
                   <Label>ISBN <span className="text-slate-400 font-normal">(optional if no barcode)</span></Label>
                   <Input value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} placeholder="13-digit barcode" inputMode="numeric" />
@@ -569,13 +568,18 @@ function ScanPage() {
                 <div className="col-span-2 space-y-1.5">
                   <Label>Title <span className="text-red-500">*</span></Label>
                   <div className="relative">
-                    <Input value={form.title} onChange={(e) => handleTitleChange(e.target.value)} />
+                    <Input
+                      value={form.title}
+                      onChange={(e) => handleTitleChange(e.target.value)}
+                      onBlur={() => setTimeout(() => setTitleSuggestions([]), 150)}
+                    />
                     {titleSuggestions.length > 0 && (
                       <div className="absolute z-10 w-full mt-1 rounded-md border border-slate-200 bg-white shadow-lg overflow-hidden">
                         {titleSuggestions.map((s, i) => (
                           <div
                             key={i}
                             className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 border-b last:border-0 border-slate-100"
+                            onMouseDown={(e) => e.preventDefault()}
                             onClick={() => {
                               setForm(f => ({
                                 ...f,
@@ -610,7 +614,8 @@ function ScanPage() {
                   <Input value={form.year} onChange={(e) => setForm({ ...form, year: e.target.value })} inputMode="numeric" />
                 </div>
               </div>
-            </details>
+            </div>
+
 
             {/* Quick-entry fields */}
             <div className="grid grid-cols-2 gap-3">

@@ -14,6 +14,8 @@ export function BarcodeScanner({ onDetected, paused }: Props) {
   const lastCodeRef = useRef<{ code: string; ts: number }>({ code: "", ts: 0 });
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState(false);
+  const [flash, setFlash] = useState(false);
+
 
   useEffect(() => {
     if (paused) return;
@@ -39,7 +41,10 @@ export function BarcodeScanner({ onDetected, paused }: Props) {
               return;
             lastCodeRef.current = { code, ts: now };
             if (navigator.vibrate) navigator.vibrate(80);
+            setFlash(true);
+            setTimeout(() => setFlash(false), 350);
             onDetected(code);
+
           },
         );
         controlsRef.current = controls;
@@ -82,6 +87,11 @@ export function BarcodeScanner({ onDetected, paused }: Props) {
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="h-1/3 w-4/5 rounded-md border-2 border-primary/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
       </div>
+      <div
+        className={`pointer-events-none absolute inset-0 bg-green-400 transition-opacity duration-300 ${flash ? "opacity-40" : "opacity-0"}`}
+        aria-hidden
+      />
+
       <div className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/50 px-2 py-1 text-xs text-white">
         <Camera className="h-3 w-3" />
         {paused ? "Paused" : active ? "Scanning" : "Starting…"}

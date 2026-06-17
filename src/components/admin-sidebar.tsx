@@ -7,13 +7,15 @@ import {
   Download,
   LogOut,
   Menu,
-  X,
   ScanLine,
   ShieldCheck,
   Database,
 } from "lucide-react";
+
 import { useNavigate } from "@tanstack/react-router";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import logoImg from "@/assets/blue-logo.png";
+
 
 export type AdminTab = "schools" | "users" | "records" | "export" | "metadata";
 
@@ -148,26 +150,13 @@ export function AdminSidebar(props: Props) {
         </span>
       </div>
 
-      {/* Mobile drawer */}
-      {open && (
-        <div className="md:hidden fixed inset-0 z-40 flex">
-          <div className="relative h-full">
-            <button
-              onClick={() => setOpen(false)}
-              aria-label="Close menu"
-              className="absolute right-2 top-3 z-10 rounded-lg p-1.5 hover:bg-slate-100"
-            >
-              <X size={18} />
-            </button>
-            <SidebarBody {...props} onChange={handleChange} />
-          </div>
-          <div
-            className="flex-1 bg-black/40"
-            onClick={() => setOpen(false)}
-            aria-hidden
-          />
-        </div>
-      )}
+      {/* Mobile drawer with smooth animation */}
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="left" className="w-64 p-0 md:hidden">
+          <SidebarBody {...props} onChange={handleChange} />
+        </SheetContent>
+      </Sheet>
+
     </>
   );
 }
