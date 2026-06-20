@@ -368,59 +368,103 @@ function ScanPage() {
   // School select screen
   if (!locked) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-background to-secondary/40 px-4 py-10">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <img src={logoImg} alt="Logo" className="h-5 w-auto object-contain" />
-              <CardTitle>Welcome, {profile?.full_name ?? "Clerk"}</CardTitle>
+      <div className="min-h-screen bg-background pb-28">
+        {/* Top app bar */}
+        <header className="fixed top-0 left-0 right-0 z-50 bg-card border-b border-border shadow-sm">
+          <div className="flex items-center justify-between px-4 h-14 max-w-2xl mx-auto">
+            <div className="flex items-center gap-3">
+              <img src={logoImg} alt="Logo" className="h-6 w-auto object-contain" />
+              <h1 className="text-base font-bold text-primary tracking-tight">EduStock Malawi</h1>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Select your school</Label>
-              <Select value={schoolId} onValueChange={setSchoolId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose school…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {schools.length === 0 ? (
-                    <div className="px-2 py-3 text-sm text-muted-foreground">
-                      No schools assigned to you yet.
+            <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-primary text-xs font-bold">
+              {(profile?.full_name ?? "C").charAt(0).toUpperCase()}
+            </div>
+          </div>
+        </header>
+
+        <main className="pt-20 px-4 max-w-2xl mx-auto">
+          {/* Hero card */}
+          <section className="mb-6">
+            <div className="rounded-2xl p-6 text-primary-foreground shadow-lg relative overflow-hidden"
+              style={{ background: "linear-gradient(135deg, #003178 0%, #0d47a1 100%)" }}>
+              <div className="relative z-10">
+                <h2 className="text-xl font-bold mb-1.5">Welcome, {profile?.full_name ?? "Clerk"}</h2>
+                <p className="text-sm opacity-90 leading-snug">
+                  Please select your assigned school to begin today's book inventory session.
+                </p>
+              </div>
+              <BookOpen className="absolute -right-6 -bottom-6 h-40 w-40 opacity-10" strokeWidth={1.5} />
+            </div>
+          </section>
+
+          {/* School list */}
+          <section className="space-y-3 mb-6">
+            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">
+              Your assigned schools
+            </Label>
+            {schools.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
+                No schools assigned to you yet.
+              </div>
+            ) : (
+              schools.map((s) => {
+                const selected = schoolId === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSchoolId(s.id)}
+                    className={`w-full flex items-center p-4 bg-card border rounded-xl shadow-sm transition-all active:scale-[0.98] text-left ${
+                      selected
+                        ? "border-primary bg-secondary ring-2 ring-primary/20"
+                        : "border-border hover:border-primary/40"
+                    }`}
+                  >
+                    <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center mr-3 shrink-0">
+                      <MapPin className="h-5 w-5 text-primary" />
                     </div>
-                  ) : (
-                    schools.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold text-foreground truncate">{s.name}</h3>
+                      {s.district && (
+                        <p className="text-xs text-muted-foreground truncate">{s.district}</p>
+                      )}
+                    </div>
+                    {selected && (
+                      <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0 ml-2">
+                        ✓
+                      </div>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </section>
+
+          {/* Footer actions */}
+          <div className="flex justify-between items-center pt-2">
+            {(role === "admin" || role === "super_admin") && (
+              <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/admin" })}>
+                Admin panel
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => signOut()} className="ml-auto">
+              <LogOut className="mr-1 h-4 w-4" /> Log out
+            </Button>
+          </div>
+        </main>
+
+        {/* Fixed CTA */}
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-card/90 backdrop-blur-md border-t border-border z-50">
+          <div className="max-w-2xl mx-auto">
             <Button
               onClick={startSession}
-              className="w-full"
               disabled={!schoolId}
+              className="w-full h-12 rounded-xl uppercase tracking-wider text-xs font-bold shadow-md"
             >
-              Start Recording
+              Start Recording Session →
             </Button>
-            <div className="flex justify-between pt-2">
-              {(role === "admin" || role === "super_admin") && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => navigate({ to: "/admin" })}
-                >
-                  Admin panel
-                </Button>
-              )}
-              <Button variant="ghost" size="sm" onClick={() => signOut()}>
-                <LogOut className="mr-1 h-4 w-4" /> Log out
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
