@@ -1619,10 +1619,10 @@ function MetadataTab() {
 
   // Load total count on mount
   useEffect(() => {
-    supabase
+    (supabase as any)
       .from("book_metadata")
       .select("id", { count: "exact", head: true })
-      .then(({ count }) => setCount(count ?? 0));
+      .then(({ count }: { count: number | null }) => setCount(count ?? 0));
   }, [progress]);
 
   // Debounced search
@@ -1632,7 +1632,7 @@ function MetadataTab() {
     clearTimeout(searchRef.current);
     if (q.length < 2) { setResults([]); return; }
     searchRef.current = setTimeout(async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("book_metadata")
         .select("title, author, isbn, publisher, year, category")
         .ilike("title", `%${q}%`)
@@ -1658,7 +1658,7 @@ function MetadataTab() {
       }
 
       if (ev.data.type === 'batch') {
-        const { error } = await supabase.from('book_metadata').upsert(ev.data.batch, { onConflict: 'isbn' });
+        const { error } = await (supabase as any).from('book_metadata').upsert(ev.data.batch, { onConflict: 'isbn' });
         if (error) console.error("Batch error:", error);
         setProgress(Math.round(ev.data.progress * 100));
       } else if (ev.data.type === 'done') {

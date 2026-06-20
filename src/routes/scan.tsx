@@ -368,112 +368,173 @@ function ScanPage() {
   // School select screen
   if (!locked) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-background to-secondary/40 px-4 py-10">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <img src={logoImg} alt="Logo" className="h-5 w-auto object-contain" />
-              <CardTitle>Welcome, {profile?.full_name ?? "Clerk"}</CardTitle>
+      <div className="min-h-screen bg-background pb-28">
+        {/* Top app bar */}
+        <header className="fixed top-0 left-0 right-0 z-50 bg-card border-b border-border shadow-sm">
+          <div className="flex items-center justify-between px-4 h-14 max-w-2xl mx-auto">
+            <div className="flex items-center gap-3">
+              <img src={logoImg} alt="Logo" className="h-6 w-auto object-contain" />
+              <h1 className="text-base font-bold text-primary tracking-tight">EduStock Malawi</h1>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Select your school</Label>
-              <Select value={schoolId} onValueChange={setSchoolId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose school…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {schools.length === 0 ? (
-                    <div className="px-2 py-3 text-sm text-muted-foreground">
-                      No schools assigned to you yet.
+            <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-primary text-xs font-bold">
+              {(profile?.full_name ?? "C").charAt(0).toUpperCase()}
+            </div>
+          </div>
+        </header>
+
+        <main className="pt-20 px-4 max-w-2xl mx-auto">
+          {/* Hero card */}
+          <section className="mb-6">
+            <div className="rounded-2xl p-6 text-primary-foreground shadow-lg relative overflow-hidden"
+              style={{ background: "linear-gradient(135deg, #003178 0%, #0d47a1 100%)" }}>
+              <div className="relative z-10">
+                <h2 className="text-xl font-bold mb-1.5">Welcome, {profile?.full_name ?? "Clerk"}</h2>
+                <p className="text-sm opacity-90 leading-snug">
+                  Please select your assigned school to begin today's book inventory session.
+                </p>
+              </div>
+              <BookOpen className="absolute -right-6 -bottom-6 h-40 w-40 opacity-10" strokeWidth={1.5} />
+            </div>
+          </section>
+
+          {/* School list */}
+          <section className="space-y-3 mb-6">
+            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">
+              Your assigned schools
+            </Label>
+            {schools.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
+                No schools assigned to you yet.
+              </div>
+            ) : (
+              schools.map((s) => {
+                const selected = schoolId === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSchoolId(s.id)}
+                    className={`w-full flex items-center p-4 bg-card border rounded-xl shadow-sm transition-all active:scale-[0.98] text-left ${
+                      selected
+                        ? "border-primary bg-secondary ring-2 ring-primary/20"
+                        : "border-border hover:border-primary/40"
+                    }`}
+                  >
+                    <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center mr-3 shrink-0">
+                      <MapPin className="h-5 w-5 text-primary" />
                     </div>
-                  ) : (
-                    schools.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold text-foreground truncate">{s.name}</h3>
+                      {s.district && (
+                        <p className="text-xs text-muted-foreground truncate">{s.district}</p>
+                      )}
+                    </div>
+                    {selected && (
+                      <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0 ml-2">
+                        ✓
+                      </div>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </section>
+
+          {/* Footer actions */}
+          <div className="flex justify-between items-center pt-2">
+            {(role === "admin" || role === "super_admin") && (
+              <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/admin" })}>
+                Admin panel
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => signOut()} className="ml-auto">
+              <LogOut className="mr-1 h-4 w-4" /> Log out
+            </Button>
+          </div>
+        </main>
+
+        {/* Fixed CTA */}
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-card/90 backdrop-blur-md border-t border-border z-50">
+          <div className="max-w-2xl mx-auto">
             <Button
               onClick={startSession}
-              className="w-full"
               disabled={!schoolId}
+              className="w-full h-12 rounded-xl uppercase tracking-wider text-xs font-bold shadow-md"
             >
-              Start Recording
+              Start Recording Session →
             </Button>
-            <div className="flex justify-between pt-2">
-              {(role === "admin" || role === "super_admin") && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => navigate({ to: "/admin" })}
-                >
-                  Admin panel
-                </Button>
-              )}
-              <Button variant="ghost" size="sm" onClick={() => signOut()}>
-                <LogOut className="mr-1 h-4 w-4" /> Log out
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="mx-auto max-w-2xl px-3 pb-16">
-      <header className="sticky top-0 z-10 -mx-3 mb-3 border-b bg-background/95 px-3 py-2 backdrop-blur">
+      <header className="sticky top-0 z-10 -mx-3 mb-4 border-b border-border bg-card/95 px-4 py-2.5 backdrop-blur shadow-sm">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2.5">
             <MapPin className="h-4 w-4 shrink-0 text-primary" />
-            <span className="truncate text-sm font-medium">
-              {activeSchool?.name}
-            </span>
-            <Badge variant="secondary" className="ml-2 font-mono" title={`${scanCount} entries · ${totalBooks} books`}>
-              {scanCount}/{totalBooks}
-            </Badge>
-
+            <div className="min-w-0">
+              <div className="truncate text-sm font-bold text-primary leading-tight">
+                {activeSchool?.name}
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-success">
+                  Session active
+                </span>
+              </div>
+            </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => signOut()}>
-            <LogOut className="mr-1 h-4 w-4" />
-            Log out
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <div className="bg-primary text-primary-foreground px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
+              <BookOpen className="h-3.5 w-3.5" />
+              <span className="text-xs font-bold">{scanCount}/{totalBooks}</span>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => signOut()} title="Log out">
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </header>
 
       {step === "scan" && (
         <section className="mb-4">
           {lastScanned && (
-            <div className="mb-2 rounded-md bg-green-50 px-3 py-1.5 text-xs text-green-700 flex items-center justify-between">
-              <span className="truncate">✓ Last saved: {lastScanned}</span>
-              <span className="shrink-0 ml-2 text-green-600/70">{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+            <div className="mb-3 rounded-xl bg-secondary border border-success/30 px-3 py-2.5 text-xs text-success flex items-center justify-between">
+              <span className="truncate flex items-center gap-1.5">
+                <span className="material-symbols-outlined" style={{fontSize: '16px'}}>✓</span>
+                Last saved: <strong className="font-semibold">{lastScanned}</strong>
+              </span>
+              <span className="shrink-0 ml-2 opacity-70">
+                {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+              </span>
             </div>
           )}
-          <BarcodeScanner onDetected={handleDetected} paused={paused} />
-          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>Point camera at the barcode</span>
+          <div className="rounded-2xl overflow-hidden shadow-sm border border-border">
+            <BarcodeScanner onDetected={handleDetected} paused={paused} />
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground px-1">
+            <span>Align ISBN barcode in the frame</span>
             {paused && (
               <Button
                 size="sm"
                 variant="outline"
+                className="rounded-full h-7 text-xs"
                 onClick={() => setPaused(false)}
               >
                 Resume camera
               </Button>
             )}
           </div>
-          <Button 
-            variant="secondary" 
-            className="w-full mt-3" 
+          <button
+            type="button"
             onClick={() => { setForm({ ...empty }); setLookupHit(false); setStep("review"); setPaused(true); }}
+            className="mt-4 w-full h-12 rounded-xl border-2 border-dashed border-border bg-card text-primary font-semibold text-sm flex items-center justify-center gap-2 hover:bg-secondary transition-colors active:scale-[0.98]"
           >
-            Add book manually
-          </Button>
+            <Search className="h-4 w-4" /> Add book manually
+          </button>
         </section>
       )}
 
@@ -519,51 +580,95 @@ function ScanPage() {
           </CardContent>
         </Card>
       ) : step === "review" ? (
-        <Card className="mb-4">
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">
-              {lookupHit ? "Review book details" : "Enter book details"}
-            </CardTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => { setStep("scan"); setPaused(false); }}
-            >
-              ← Back
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {lookupHit ? (
-              <div className="rounded-lg border bg-green-50 border-green-200 p-3 text-xs text-green-800 flex items-start gap-2">
-                <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                <span>Match found. Review the details below and tap <strong>Next</strong> to add quantity, condition and shelf.</span>
-              </div>
-            ) : (
-              <div className="rounded-lg border bg-amber-50 border-amber-200 p-3 text-xs text-amber-800 flex items-start gap-2">
-                <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                <span>No ISBN match. Please fill in the book details manually, then tap <strong>Next</strong>.</span>
-              </div>
-            )}
+        <section className="mb-4 space-y-4">
+          {/* Progress indicator */}
+          <div className="flex items-center gap-2 px-1">
+            <div className="h-1.5 flex-1 bg-primary rounded-full" />
+            <div className="h-1.5 flex-1 bg-primary rounded-full" />
+            <div className="h-1.5 flex-1 bg-border rounded-full" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-primary ml-2">
+              Step 2 of 3
+            </span>
+          </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2 space-y-1.5">
-                <Label>ISBN <span className="text-slate-400 font-normal">(optional if no barcode)</span></Label>
-                <Input value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} placeholder="13-digit barcode" inputMode="numeric" />
+          {/* Status banner */}
+          {lookupHit ? (
+            <div className="rounded-xl bg-secondary text-primary p-3 flex items-center gap-3">
+              <Info className="h-5 w-5 shrink-0" />
+              <p className="text-xs font-semibold">Barcode successfully scanned · Review details below</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-accent/40 p-3 flex items-center gap-3" style={{backgroundColor: '#fff8e7'}}>
+              <Info className="h-5 w-5 shrink-0 text-accent-foreground" />
+              <p className="text-xs font-semibold text-accent-foreground">No ISBN match · Fill in details manually</p>
+            </div>
+          )}
+
+          {/* Bibliographic bento header */}
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  Book title
+                </span>
+                <h2 className="text-lg font-bold text-primary mt-1 leading-tight">
+                  {form.title || <span className="text-muted-foreground italic font-normal">Untitled</span>}
+                </h2>
+                {form.isbn && (
+                  <p className="text-xs font-mono text-muted-foreground mt-1.5">ISBN: {form.isbn}</p>
+                )}
               </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label>Title <span className="text-red-500">*</span></Label>
+              <div className="bg-secondary p-2 rounded-lg shrink-0">
+                <BookOpen className="h-5 w-5 text-primary" />
+              </div>
+            </div>
+          </div>
+
+          {/* Edit fields */}
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-foreground">Edit details</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => { setStep("scan"); setPaused(false); }}
+              >
+                ← Back to scan
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  ISBN <span className="text-muted-foreground/60 font-normal normal-case">(optional)</span>
+                </Label>
+                <Input
+                  value={form.isbn}
+                  onChange={(e) => setForm({ ...form, isbn: e.target.value })}
+                  placeholder="13-digit barcode"
+                  inputMode="numeric"
+                  className="h-11 rounded-lg"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Title <span className="text-destructive normal-case">*</span>
+                </Label>
                 <div className="relative">
                   <Input
                     value={form.title}
                     onChange={(e) => handleTitleChange(e.target.value)}
                     onBlur={() => setTimeout(() => setTitleSuggestions([]), 150)}
+                    className="h-11 rounded-lg"
                   />
                   {titleSuggestions.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 rounded-md border border-slate-200 bg-white shadow-lg overflow-hidden">
+                    <div className="absolute z-10 w-full mt-1 rounded-lg border border-border bg-card shadow-lg overflow-hidden">
                       {titleSuggestions.map((s, i) => (
                         <div
                           key={i}
-                          className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 border-b last:border-0 border-slate-100"
+                          className="px-3 py-2 text-sm cursor-pointer hover:bg-secondary border-b last:border-0 border-border"
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             setForm(f => ({
@@ -579,132 +684,220 @@ function ScanPage() {
                           }}
                         >
                           <div className="font-medium truncate">{s.title}</div>
-                          <div className="text-xs text-slate-500 truncate">{s.author} • {s.year}</div>
+                          <div className="text-xs text-muted-foreground truncate">{s.author} • {s.year}</div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
               </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label>Author(s) <span className="text-red-500">*</span></Label>
-                <Input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Publisher <span className="text-red-500">*</span></Label>
-                <Input value={form.publisher} onChange={(e) => setForm({ ...form, publisher: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Year <span className="text-red-500">*</span></Label>
-                <Input value={form.year} onChange={(e) => setForm({ ...form, year: e.target.value })} inputMode="numeric" />
-              </div>
-            </div>
 
-            <div className="flex gap-2">
-              <Button
-                onClick={() => {
-                  const missing: string[] = [];
-                  if (!form.title?.trim()) missing.push("Title");
-                  if (!form.author?.trim()) missing.push("Author");
-                  if (!form.publisher?.trim()) missing.push("Publisher");
-                  if (!form.year?.trim()) missing.push("Year");
-                  if (missing.length > 0) {
-                    toast.error(`Please fill in: ${missing.join(", ")}`);
-                    return;
-                  }
-                  setStep("specifics");
-                }}
-                className="flex-1"
-              >
-                Next →
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => { setForm({ ...empty }); setStep("scan"); setPaused(false); }}
-              >
-                Cancel
-              </Button>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Author(s) <span className="text-destructive normal-case">*</span>
+                </Label>
+                <Input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} className="h-11 rounded-lg" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Publisher <span className="text-destructive normal-case">*</span>
+                  </Label>
+                  <Input value={form.publisher} onChange={(e) => setForm({ ...form, publisher: e.target.value })} className="h-11 rounded-lg" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Year <span className="text-destructive normal-case">*</span>
+                  </Label>
+                  <Input value={form.year} onChange={(e) => setForm({ ...form, year: e.target.value })} inputMode="numeric" className="h-11 rounded-lg" />
+                </div>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="mb-4">
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">Copy specifics</CardTitle>
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-col gap-2.5">
             <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setStep("review")}
+              onClick={() => {
+                const missing: string[] = [];
+                if (!form.title?.trim()) missing.push("Title");
+                if (!form.author?.trim()) missing.push("Author");
+                if (!form.publisher?.trim()) missing.push("Publisher");
+                if (!form.year?.trim()) missing.push("Year");
+                if (missing.length > 0) {
+                  toast.error(`Please fill in: ${missing.join(", ")}`);
+                  return;
+                }
+                setStep("specifics");
+              }}
+              className="w-full h-12 rounded-xl uppercase tracking-wider text-xs font-bold shadow-md"
             >
-              ← Back
+              Next: Copy Specifics →
             </Button>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Compact summary of the book being saved */}
-            <div className="rounded-lg border bg-secondary/40 p-3 text-sm">
-              <div className="font-semibold text-foreground truncate">
-                {form.title || <span className="text-muted-foreground italic">No title</span>}
+            <Button
+              variant="outline"
+              className="w-full h-12 rounded-xl uppercase tracking-wider text-xs font-bold"
+              onClick={() => { setForm({ ...empty }); setStep("scan"); setPaused(false); }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </section>
+      ) : (
+        <section className="mb-4 space-y-4">
+          {/* Progress indicator */}
+          <div className="flex items-center gap-2 px-1">
+            <div className="h-1.5 flex-1 bg-primary rounded-full" />
+            <div className="h-1.5 flex-1 bg-primary rounded-full" />
+            <div className="h-1.5 flex-1 bg-primary rounded-full" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-primary ml-2">
+              Step 3 of 3
+            </span>
+          </div>
+
+          {/* Book summary bento */}
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                  Saving copy of
+                </span>
+                <h2 className="text-base font-bold text-primary mt-1 leading-tight truncate">
+                  {form.title || <span className="text-muted-foreground italic font-normal">Untitled</span>}
+                </h2>
+                {form.author && (
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate">by {form.author}</p>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">
+                  {[form.publisher, form.year].filter(Boolean).join(" · ") || "—"}
+                </p>
               </div>
-              {form.author && (
-                <div className="text-xs text-muted-foreground truncate">by {form.author}</div>
-              )}
-              <div className="mt-1 text-xs text-muted-foreground">
-                {[form.publisher, form.year].filter(Boolean).join(" · ") || "—"}
+              <div className="bg-secondary p-2 rounded-lg shrink-0">
+                <BookOpen className="h-5 w-5 text-primary" />
               </div>
-              <div className="mt-0.5 text-xs font-mono text-muted-foreground">ISBN: {form.isbn || "—"}</div>
+            </div>
+          </div>
+
+          {/* Specifics card */}
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-foreground">Copy specifics</h3>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setStep("review")}>
+                ← Back
+              </Button>
             </div>
 
-            {/* Copy-specific fields */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Quantity <span className="text-red-500">*</span></Label>
-                <Input
+            {/* Quantity stepper */}
+            <div className="space-y-3">
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                Quantity in stock
+              </Label>
+              <div className="flex items-center justify-center gap-5">
+                <button
+                  type="button"
+                  className="w-12 h-12 rounded-full border-2 border-primary text-primary flex items-center justify-center active:scale-90 transition-all hover:bg-secondary disabled:opacity-40"
+                  onClick={() => setForm({ ...form, quantity: Math.max(1, Number(form.quantity) - 1) })}
+                  disabled={Number(form.quantity) <= 1}
+                  aria-label="Decrease"
+                >
+                  <span className="text-2xl leading-none">−</span>
+                </button>
+                <input
                   type="number"
                   min={1}
                   value={form.quantity}
                   onChange={(e) =>
                     setForm({ ...form, quantity: e.target.value === "" ? ("" as unknown as number) : Number(e.target.value) })
                   }
+                  className="w-20 h-12 text-center text-2xl font-bold border-b-2 border-border focus:border-primary transition-colors bg-transparent outline-none text-primary"
                 />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Condition</Label>
-                <Select
-                  value={form.condition}
-                  onValueChange={(v) => setForm({ ...form, condition: v as typeof form.condition })}
+                <button
+                  type="button"
+                  className="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center active:scale-90 transition-all shadow-sm hover:opacity-90"
+                  onClick={() => setForm({ ...form, quantity: Number(form.quantity) + 1 })}
+                  aria-label="Increase"
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Good">Good</SelectItem>
-                    <SelectItem value="Fair">Fair</SelectItem>
-                    <SelectItem value="Poor">Poor</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Category <span className="text-slate-400 font-normal">(optional)</span></Label>
-                <Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Shelf <span className="text-slate-400 font-normal">(optional)</span></Label>
-                <Input value={form.shelf_location} onChange={(e) => setForm({ ...form, shelf_location: e.target.value })} />
+                  <span className="text-2xl leading-none">+</span>
+                </button>
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <Button onClick={() => save()} disabled={saving} className="flex-1">
-                <Save className="mr-1 h-4 w-4" />
-                {saving ? "Saving…" : "Save & scan next"}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => { setForm({ ...empty }); setStep("scan"); setPaused(false); }}
-              >
-                Clear
-              </Button>
+            {/* Condition segmented */}
+            <div className="space-y-3">
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                Book condition
+              </Label>
+              <div className="flex gap-2">
+                {(["Good", "Fair", "Poor"] as const).map((cond) => {
+                  const active = form.condition === cond;
+                  const colorMap = {
+                    Good: active ? "bg-success text-white border-success" : "border-border text-foreground",
+                    Fair: active ? "bg-accent text-accent-foreground border-accent" : "border-border text-foreground",
+                    Poor: active ? "bg-destructive text-destructive-foreground border-destructive" : "border-border text-foreground",
+                  };
+                  return (
+                    <button
+                      key={cond}
+                      type="button"
+                      onClick={() => setForm({ ...form, condition: cond })}
+                      className={`flex-1 h-11 rounded-lg border-2 font-semibold text-sm transition-all active:scale-95 ${colorMap[cond]}`}
+                    >
+                      {cond}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </CardContent>
-        </Card>
+
+            {/* Category */}
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Category <span className="text-muted-foreground/60 font-normal normal-case">(optional)</span>
+              </Label>
+              <Input
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                placeholder="e.g., Mathematics, English"
+                className="h-11 rounded-lg"
+              />
+            </div>
+
+            {/* Shelf with icon */}
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Shelf location <span className="text-muted-foreground/60 font-normal normal-case">(optional)</span>
+              </Label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={form.shelf_location}
+                  onChange={(e) => setForm({ ...form, shelf_location: e.target.value })}
+                  placeholder="e.g., Section B, Row 4"
+                  className="h-11 rounded-lg pl-10"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-col gap-2.5">
+            <Button
+              onClick={() => save()}
+              disabled={saving}
+              className="w-full h-12 rounded-xl uppercase tracking-wider text-xs font-bold shadow-md flex items-center justify-center gap-2"
+            >
+              {saving ? "Saving…" : <>Save & Scan Next <Search className="h-4 w-4" /></>}
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full h-12 rounded-xl uppercase tracking-wider text-xs font-bold"
+              onClick={() => { setForm({ ...empty }); setStep("scan"); setPaused(false); }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </section>
       )}
 
       <Card>
