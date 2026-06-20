@@ -502,31 +502,39 @@ function ScanPage() {
       {step === "scan" && (
         <section className="mb-4">
           {lastScanned && (
-            <div className="mb-2 rounded-md bg-green-50 px-3 py-1.5 text-xs text-green-700 flex items-center justify-between">
-              <span className="truncate">✓ Last saved: {lastScanned}</span>
-              <span className="shrink-0 ml-2 text-green-600/70">{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+            <div className="mb-3 rounded-xl bg-secondary border border-success/30 px-3 py-2.5 text-xs text-success flex items-center justify-between">
+              <span className="truncate flex items-center gap-1.5">
+                <span className="material-symbols-outlined" style={{fontSize: '16px'}}>✓</span>
+                Last saved: <strong className="font-semibold">{lastScanned}</strong>
+              </span>
+              <span className="shrink-0 ml-2 opacity-70">
+                {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+              </span>
             </div>
           )}
-          <BarcodeScanner onDetected={handleDetected} paused={paused} />
-          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>Point camera at the barcode</span>
+          <div className="rounded-2xl overflow-hidden shadow-sm border border-border">
+            <BarcodeScanner onDetected={handleDetected} paused={paused} />
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground px-1">
+            <span>Align ISBN barcode in the frame</span>
             {paused && (
               <Button
                 size="sm"
                 variant="outline"
+                className="rounded-full h-7 text-xs"
                 onClick={() => setPaused(false)}
               >
                 Resume camera
               </Button>
             )}
           </div>
-          <Button 
-            variant="secondary" 
-            className="w-full mt-3" 
+          <button
+            type="button"
             onClick={() => { setForm({ ...empty }); setLookupHit(false); setStep("review"); setPaused(true); }}
+            className="mt-4 w-full h-12 rounded-xl border-2 border-dashed border-border bg-card text-primary font-semibold text-sm flex items-center justify-center gap-2 hover:bg-secondary transition-colors active:scale-[0.98]"
           >
-            Add book manually
-          </Button>
+            <Search className="h-4 w-4" /> Add book manually
+          </button>
         </section>
       )}
 
