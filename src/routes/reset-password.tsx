@@ -71,14 +71,14 @@ function ResetPasswordPage() {
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-background to-secondary/40 px-4">
-        <Card className="w-full max-w-md rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-sm">
           <CardContent className="pt-8 pb-8 text-center space-y-3">
-            <KeyRound className="mx-auto h-10 w-10 text-slate-300" />
-            <p className="text-sm text-slate-500">
+            <KeyRound className="mx-auto h-8 w-8 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
               Waiting for your reset link…
             </p>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-muted-foreground/80">
               If you arrived here directly, please use the password reset link
               from your email.
             </p>
@@ -96,25 +96,27 @@ function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-background to-secondary/40 px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="mb-6 flex flex-col items-center gap-2">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 flex flex-col items-center gap-3">
           <img
             src={logoImg}
             alt="Logo"
-            className="h-14 object-contain"
+            className="h-11 object-contain"
           />
-          <h1 className="text-xl font-bold text-primary">Set New Password</h1>
-          <p className="text-sm text-slate-500">
-            Choose a strong password for your account.
-          </p>
+          <div className="text-center">
+            <h1 className="text-page-title text-foreground">Set new password</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Choose a strong password for your account.
+            </p>
+          </div>
         </div>
 
-        <Card className="rounded-2xl border border-slate-200 shadow-sm">
+        <Card>
           <CardContent className="pt-6">
             <form onSubmit={submit} className="space-y-4">
               {error && (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-center text-sm text-red-600">
+                <div className="rounded-md border border-destructive/25 bg-destructive/10 p-3 text-center text-sm text-destructive">
                   {error}
                 </div>
               )}
@@ -129,22 +131,22 @@ function ResetPasswordPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     minLength={6}
                     required
-                    className="rounded-xl px-4 py-3 h-auto pr-10"
+                    className="h-10 pr-10"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPwd((s) => !s)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     aria-label={showPwd ? "Hide password" : "Show password"}
                   >
                     {showPwd ? (
-                      <EyeOff className="h-5 w-5" />
+                      <EyeOff className="h-4 w-4" />
                     ) : (
-                      <Eye className="h-5 w-5" />
+                      <Eye className="h-4 w-4" />
                     )}
                   </button>
                 </div>
-                <p className="text-xs text-slate-400">Minimum 6 characters</p>
+                <p className="text-xs text-muted-foreground">Minimum 6 characters</p>
               </div>
 
               <div className="space-y-1.5">
@@ -155,16 +157,16 @@ function ResetPasswordPage() {
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
                   required
-                  className="rounded-xl px-4 py-3 h-auto"
+                  className="h-10"
                 />
               </div>
 
               <Button
                 type="submit"
-                className="w-full rounded-xl py-6 bg-blue-600 hover:bg-blue-700 text-white"
+                className="w-full h-10"
                 disabled={busy}
               >
-                {busy ? "Updating…" : "Set New Password"}
+                {busy ? "Updating…" : "Set new password"}
               </Button>
             </form>
           </CardContent>

@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   UserX,
+  User,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,8 @@ import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { StatusBadge, type StatusValue } from "@/components/status-badge";
-import { AdminSidebar, type AdminTab } from "@/components/admin-sidebar";
+import { DashboardLayout } from "@/components/ui/dashboard-layout";
+import { AccountSettings } from "@/components/account-settings";
 import {
   useSchoolsQuery,
   useSchoolStatsQuery,
@@ -74,6 +76,17 @@ import { type BookMeta } from "@/lib/book-metadata";
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
+
+export type AdminTab = "schools" | "users" | "records" | "metadata" | "export" | "account";
+
+const ADMIN_ITEMS = [
+  { id: "schools", title: "Schools", icon: SchoolIcon },
+  { id: "users", title: "Users", icon: Users },
+  { id: "records", title: "Records", icon: BarChart2 },
+  { id: "metadata", title: "Reference Data", icon: BookOpen },
+  { id: "export", title: "Export", icon: Download },
+  { id: "account", title: "Account", icon: User },
+];
 
 interface ClerkSchoolAssignmentOld {
   clerk_id: string;
@@ -131,36 +144,35 @@ function AdminPage() {
     if (loading) return;
     if (!user) navigate({ to: "/auth" });
     else if (role !== "super_admin" && role !== "admin")
-      navigate({ to: "/scan" });
+      navigate({ to: "/clerk" });
   }, [user, role, loading, navigate]);
 
   if (loading || !user || (role !== "super_admin" && role !== "admin")) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-slate-500">
+      <div className="flex min-h-screen items-center justify-center text-muted-foreground text-sm">
         Loading…
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 md:flex-row">
-      <AdminSidebar
-        active={tab}
-        onChange={setTab}
-        fullName={profile?.full_name}
-        role={role}
-        onSignOut={() => signOut()}
-      />
-      <main className="min-w-0 flex-1 overflow-y-auto p-4 md:p-8">
-        <div className="mx-auto max-w-5xl space-y-6">
-          {tab === "schools" && <SchoolsTab />}
-          {tab === "users" && <UsersTab />}
-          {tab === "records" && <RecordsTab />}
-          {tab === "metadata" && <MetadataTab />}
-          {tab === "export" && <ExportTab />}
-        </div>
-      </main>
-    </div>
+    <DashboardLayout
+      items={ADMIN_ITEMS}
+      activeTab={tab}
+      onTabChange={(t) => setTab(t as AdminTab)}
+      userFullName={profile?.full_name}
+      userRole={role}
+      onSignOut={() => signOut()}
+    >
+      <div className="space-y-6">
+        {tab === "schools" && <SchoolsTab />}
+        {tab === "users" && <UsersTab />}
+        {tab === "records" && <RecordsTab />}
+        {tab === "metadata" && <MetadataTab />}
+        {tab === "export" && <ExportTab />}
+        {tab === "account" && <AccountSettings />}
+      </div>
+    </DashboardLayout>
   );
 }
 
@@ -176,9 +188,9 @@ function SectionHeader({
   return (
     <div className="flex items-center justify-between gap-3">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
+        <h1 className="text-page-title text-foreground">{title}</h1>
         {subtitle && (
-          <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>
         )}
       </div>
       {action}
@@ -278,7 +290,7 @@ function SchoolsTab() {
 
   if (loadingSchools || loadingStats) {
     return (
-      <div className="py-10 text-center text-slate-500">Loading schools...</div>
+      <div className="py-10 text-center text-sm text-muted-foreground">Loading schools…</div>
     );
   }
 
@@ -295,7 +307,7 @@ function SchoolsTab() {
             }}
           >
             <Plus className="mr-1 h-4 w-4" />
-            Add School
+            Add school
           </Button>
         }
       />
@@ -306,14 +318,14 @@ function SchoolsTab() {
           return (
             <div
               key={s.id}
-              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+              className="rounded-lg border border-border bg-card p-5"
             >
-              <div className="font-semibold text-slate-900">{s.name}</div>
-              <div className="text-sm text-slate-500">
+              <div className="font-medium text-foreground">{s.name}</div>
+              <div className="text-sm text-muted-foreground">
                 {s.district ?? "—"}
                 {s.region ? ` · ${s.region}` : ""}
               </div>
-              <div className="mt-3 flex gap-4 text-sm text-slate-600">
+              <div className="mt-3 flex gap-4 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1.5">
                   <BookOpen size={14} />
                   {(counts[s.id] ?? 0).toLocaleString()} books
@@ -325,7 +337,7 @@ function SchoolsTab() {
               </div>
               <div className="mt-3 flex items-center justify-between">
                 <StatusBadge status={status} />
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-muted-foreground">
                   {lastEntries[s.id]
                     ? `Last entry: ${timeAgo(lastEntries[s.id])}`
                     : "No entries yet"}
@@ -353,7 +365,7 @@ function SchoolsTab() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
                   onClick={() => setDeleteTarget(s.id)}
                   disabled={deleteMutation.isPending}
                 >
@@ -364,7 +376,7 @@ function SchoolsTab() {
           );
         })}
         {schools.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500 md:col-span-2">
+          <div className="rounded-lg border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground md:col-span-2">
             No schools yet — add one to get started.
           </div>
         )}
@@ -389,7 +401,7 @@ function SchoolsTab() {
           <form onSubmit={save} className="space-y-3">
             <div className="space-y-1.5">
               <Label>
-                School Name <span className="text-red-500">*</span>
+                School name <span className="text-destructive">*</span>
               </Label>
               <Input name="name" required defaultValue={editing?.name ?? ""} />
             </div>
@@ -451,12 +463,12 @@ function SchoolsTab() {
             <AlertDialogAction
               onClick={confirmDelete}
               disabled={deleteMutation.isPending}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive hover:bg-destructive/90"
             >
               {deleteMutation.isPending && (
                 <Loader2 className="mr-1 h-4 w-4 animate-spin" />
               )}
-              Delete Permanently
+              Delete permanently
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -571,9 +583,9 @@ function UsersTab() {
   };
 
   const roleBadgeClass = (label: string) => {
-    if (label === "Super Admin") return "bg-slate-800 text-white";
-    if (label === "Admin") return "bg-purple-100 text-purple-700";
-    return "bg-blue-100 text-blue-700";
+    if (label === "Super Admin") return "bg-primary text-primary-foreground";
+    if (label === "Admin") return "bg-accent/15 text-accent";
+    return "bg-secondary text-foreground";
   };
 
   const { user } = useAuth();
@@ -581,7 +593,7 @@ function UsersTab() {
 
   if (l1 || l2 || l3 || l4) {
     return (
-      <div className="py-10 text-center text-slate-500">Loading users...</div>
+      <div className="py-10 text-center text-sm text-muted-foreground">Loading users…</div>
     );
   }
 
@@ -595,12 +607,12 @@ function UsersTab() {
         action={
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="mr-1 h-4 w-4" />
-            Add User
+            Add user
           </Button>
         }
       />
 
-      <div className="space-y-3">
+      <div className="space-y-2.5">
         {users.map((u) => {
           const rankLabel = rankFor(u.id);
           const userSchools = (assignments[u.id] ?? [])
@@ -615,17 +627,17 @@ function UsersTab() {
           return (
             <div
               key={u.id}
-              className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${
+              className={`rounded-lg border border-border bg-card p-4 ${
                 !u.active ? "opacity-60" : ""
               }`}
             >
               <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-primary">
                   {initials}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-slate-900">
+                    <span className="font-medium text-foreground">
                       {u.full_name ?? "—"}
                     </span>
                     <span
@@ -636,15 +648,15 @@ function UsersTab() {
                       {rankLabel}
                     </span>
                     {!u.active && (
-                      <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-600">
+                      <span className="rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
                         Disabled
                       </span>
                     )}
                   </div>
-                  <div className="truncate text-sm text-slate-500">
+                  <div className="truncate text-sm text-muted-foreground">
                     {u.email}
                   </div>
-                  <div className="mt-1 text-xs text-slate-500">
+                  <div className="mt-1 text-xs text-muted-foreground">
                     {rankLabel === "Clerk"
                       ? userSchools.length
                         ? userSchools.slice(0, 2).join(", ") +
@@ -678,7 +690,7 @@ function UsersTab() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => setDeleteTarget(u)}
                     >
                       <UserX size={14} />
@@ -733,12 +745,12 @@ function UsersTab() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <UserX size={18} /> Delete account
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <UserX size={17} /> Delete account
             </DialogTitle>
             <DialogDescription>
               This will permanently delete{" "}
-              <span className="font-semibold text-slate-900">
+              <span className="font-medium text-foreground">
                 {deleteTarget?.full_name ?? deleteTarget?.email}
               </span>
               's account, role, and all school assignments. This action cannot
@@ -757,7 +769,6 @@ function UsersTab() {
               variant="destructive"
               onClick={deleteUser}
               disabled={deleteMutation.isPending}
-              className="bg-red-600 hover:bg-red-700"
             >
               {deleteMutation.isPending && (
                 <Loader2 className="mr-1 h-4 w-4 animate-spin" />
@@ -867,14 +878,14 @@ function CreateUserDialog({
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3">
           {error && (
-            <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <div className="flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive">
               <AlertCircle size={16} className="mt-0.5 shrink-0" />
               <span>{error}</span>
             </div>
           )}
           <div className="space-y-1.5">
             <Label>
-              Full Name <span className="text-red-500">*</span>
+              Full name <span className="text-destructive">*</span>
             </Label>
             <Input
               value={fullName}
@@ -884,7 +895,7 @@ function CreateUserDialog({
           </div>
           <div className="space-y-1.5">
             <Label>
-              Email <span className="text-red-500">*</span>
+              Email <span className="text-destructive">*</span>
             </Label>
             <Input
               type="email"
@@ -896,7 +907,7 @@ function CreateUserDialog({
           <div className="space-y-1.5">
             <Label>
               Temporary password{" "}
-              <span className="text-slate-400 font-normal">(optional)</span>
+              <span className="text-muted-foreground font-normal">(optional)</span>
             </Label>
             <div className="relative">
               <Input
@@ -909,13 +920,13 @@ function CreateUserDialog({
               <button
                 type="button"
                 onClick={() => setShowPwd((s) => !s)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-500 hover:bg-slate-100"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-secondary"
                 aria-label={showPwd ? "Hide password" : "Show password"}
               >
                 {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-muted-foreground">
               If left blank, the user receives an email to set their own
               password.
               {password &&
@@ -924,7 +935,7 @@ function CreateUserDialog({
           </div>
           <div className="space-y-1.5">
             <Label>
-              Role <span className="text-red-500">*</span>
+              Role <span className="text-destructive">*</span>
             </Label>
             <div className="flex gap-4">
               <label className="flex items-center gap-2 text-sm">
@@ -952,12 +963,12 @@ function CreateUserDialog({
           <div className="space-y-1.5">
             <Label>Assign schools (clerks only)</Label>
             <div
-              className={`max-h-40 space-y-1.5 overflow-y-auto rounded-md border p-3 ${
+              className={`max-h-40 space-y-1.5 overflow-y-auto rounded-md border border-border p-3 ${
                 role !== "clerk" ? "opacity-50 pointer-events-none" : ""
               }`}
             >
               {schools.length === 0 && (
-                <p className="text-sm text-slate-500">No schools available.</p>
+                <p className="text-sm text-muted-foreground">No schools available.</p>
               )}
               {schools.map((s) => {
                 const checked = selected.includes(s.id);
@@ -989,7 +1000,7 @@ function CreateUserDialog({
             </Button>
             <Button type="submit" disabled={creating}>
               {creating && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-              Create & Send Invite
+              Create & send invite
             </Button>
           </DialogFooter>
         </form>
@@ -1033,9 +1044,9 @@ function ManageUserForm({
       )}
       <div className="space-y-1.5">
         <Label>Assigned schools</Label>
-        <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-md border p-3">
+        <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-md border border-border p-3">
           {schools.length === 0 && (
-            <p className="text-sm text-slate-500">Add schools first.</p>
+            <p className="text-sm text-muted-foreground">Add schools first.</p>
           )}
           {schools.map((s) => {
             const checked = selected.includes(s.id);
@@ -1154,7 +1165,7 @@ function RecordsTab() {
 
   if (l1 || l2 || l3 || l4 || (l5 && pageRows.length === 0)) {
     return (
-      <div className="py-10 text-center text-slate-500">Loading records...</div>
+      <div className="py-10 text-center text-sm text-muted-foreground">Loading records…</div>
     );
   }
 
@@ -1167,39 +1178,39 @@ function RecordsTab() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <SummaryCard
-          label="Total Books"
+          label="Total books"
           value={totals.totalBooks.toLocaleString()}
-          icon={<BookOpen size={20} />}
+          icon={<BookOpen size={18} />}
         />
         <SummaryCard
           label="Schools"
           value={String(totals.activeSchools)}
-          icon={<SchoolIcon size={20} />}
+          icon={<SchoolIcon size={18} />}
         />
         <SummaryCard
           label="Clerks"
           value={String(totals.activeClerks)}
-          icon={<Users size={20} />}
+          icon={<Users size={18} />}
         />
         <SummaryCard
           label="Today"
           value={totals.todayBooks.toLocaleString()}
-          icon={<BarChart2 size={20} />}
+          icon={<BarChart2 size={18} />}
         />
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-100 px-5 py-3 text-sm font-semibold text-slate-700">
-          School Progress
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="border-b border-border px-5 py-3 text-sm font-medium text-foreground">
+          School progress
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <thead className="bg-secondary/50 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-2 text-left">School</th>
                 <th className="px-4 py-2 text-right">Books</th>
                 <th className="px-4 py-2 text-right">Clerks</th>
-                <th className="px-4 py-2 text-left">Last Entry</th>
+                <th className="px-4 py-2 text-left">Last entry</th>
                 <th className="px-4 py-2 text-left">Status</th>
               </tr>
             </thead>
@@ -1207,14 +1218,14 @@ function RecordsTab() {
               {perSchool.map((row) => (
                 <tr
                   key={row.school.id}
-                  className="border-t border-slate-100 text-slate-700 hover:bg-slate-50"
+                  className="border-t border-border text-foreground hover:bg-secondary/30"
                 >
                   <td className="px-4 py-2 font-medium">{row.school.name}</td>
                   <td className="px-4 py-2 text-right font-medium">
                     {row.total.toLocaleString()}
                   </td>
-                  <td className="px-4 py-2 text-right">{row.clerks}</td>
-                  <td className="px-4 py-2 text-slate-500">
+                  <td className="px-4 py-2 text-right text-muted-foreground">{row.clerks}</td>
+                  <td className="px-4 py-2 text-muted-foreground">
                     {row.lastEntry ? timeAgo(row.lastEntry) : "Never"}
                   </td>
                   <td className="px-4 py-2">
@@ -1226,7 +1237,7 @@ function RecordsTab() {
                 <tr>
                   <td
                     colSpan={5}
-                    className="px-4 py-6 text-center text-slate-500"
+                    className="px-4 py-6 text-center text-muted-foreground"
                   >
                     No schools yet.
                   </td>
@@ -1239,7 +1250,7 @@ function RecordsTab() {
 
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="text-base">Detailed records</CardTitle>
+          <CardTitle>Detailed records</CardTitle>
           <div className="flex flex-wrap gap-2">
             <Select value={schoolFilter} onValueChange={setSchoolFilter}>
               <SelectTrigger className="w-40">
@@ -1283,7 +1294,7 @@ function RecordsTab() {
         <CardContent className="px-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <thead className="bg-secondary/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2">#</th>
                   <th className="px-4 py-2">ISBN</th>
@@ -1299,24 +1310,24 @@ function RecordsTab() {
                 {pageRows.map((b, i) => (
                   <tr
                     key={b.id}
-                    className="border-t border-slate-100 hover:bg-slate-50"
+                    className="border-t border-border hover:bg-secondary/30"
                   >
-                    <td className="px-4 py-2 text-slate-400">
+                    <td className="px-4 py-2 text-muted-foreground">
                       {(page - 1) * PAGE_SIZE + i + 1}
                     </td>
-                    <td className="px-4 py-2 font-mono text-xs">
+                    <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
                       {b.isbn ?? "—"}
                     </td>
                     <td className="px-4 py-2">
-                      <div className="font-medium">{b.title ?? "—"}</div>
-                      <div className="text-xs text-slate-500">
+                      <div className="font-medium text-foreground">{b.title ?? "—"}</div>
+                      <div className="text-xs text-muted-foreground">
                         {b.author ?? ""}
                       </div>
                     </td>
                     <td className="px-4 py-2">{schoolName(b.school_id)}</td>
                     <td className="px-4 py-2">{clerkName(b.clerk_id)}</td>
                     <td className="px-4 py-2">{b.condition ?? "—"}</td>
-                    <td className="px-4 py-2 text-xs text-slate-500">
+                    <td className="px-4 py-2 text-xs text-muted-foreground">
                       {new Date(b.created_at).toLocaleString()}
                     </td>
                     <td className="px-4 py-2 text-right">
@@ -1326,11 +1337,11 @@ function RecordsTab() {
                           deleteMutation.isPending && deleteTarget === b.id
                         }
                         aria-label="Delete"
-                        className="rounded p-1 hover:bg-red-50 disabled:opacity-50"
+                        className="rounded p-1 hover:bg-destructive/10 disabled:opacity-50"
                       >
                         <Trash2
                           size={15}
-                          className="text-red-400 hover:text-red-600"
+                          className="text-destructive/70 hover:text-destructive"
                         />
                       </button>
                     </td>
@@ -1340,7 +1351,7 @@ function RecordsTab() {
                   <tr>
                     <td
                       colSpan={8}
-                      className="px-4 py-6 text-center text-slate-500"
+                      className="px-4 py-6 text-center text-muted-foreground"
                     >
                       No records match these filters.
                     </td>
@@ -1351,7 +1362,7 @@ function RecordsTab() {
           </div>
 
           {totalCount > PAGE_SIZE && (
-            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
+            <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm text-muted-foreground">
               <span>
                 Showing {(page - 1) * PAGE_SIZE + 1}–
                 {Math.min(page * PAGE_SIZE, totalCount)} of {totalCount}
@@ -1366,7 +1377,7 @@ function RecordsTab() {
                 >
                   <ChevronLeft size={14} /> Previous
                 </Button>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-muted-foreground">
                   Page {page} of {totalPages}
                 </span>
                 <Button
@@ -1401,7 +1412,7 @@ function RecordsTab() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive hover:bg-destructive/90"
             >
               Delete
             </AlertDialogAction>
@@ -1422,17 +1433,15 @@ function SummaryCard({
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="relative rounded-lg border border-border bg-card p-5">
       {icon && (
-        <div className="absolute right-4 top-4 text-slate-300">{icon}</div>
+        <div className="absolute right-4 top-4 text-muted-foreground/40">{icon}</div>
       )}
-      <div className="text-2xl font-bold text-slate-900">{value}</div>
-      <div className="mt-1 text-sm text-slate-500">{label}</div>
+      <div className="text-2xl font-semibold text-foreground tracking-tight">{value}</div>
+      <div className="mt-1 text-sm text-muted-foreground">{label}</div>
     </div>
   );
 }
-
-// ---------------- Export tab ----------------
 
 // ---------------- Export tab ----------------
 
@@ -1522,12 +1531,12 @@ function ExportTab() {
   return (
     <div className="space-y-6">
       <SectionHeader
-        title="Export Records"
+        title="Export records"
         subtitle="Download book inventory as a CSV file"
       />
 
-      <div className="max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
-        <p className="text-sm font-semibold text-slate-700">
+      <div className="max-w-xl rounded-lg border border-border bg-card p-6 space-y-5">
+        <p className="text-sm font-medium text-foreground">
           Filter your export
         </p>
 
@@ -1539,7 +1548,7 @@ function ExportTab() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Schools</SelectItem>
+              <SelectItem value="all">All schools</SelectItem>
               {schools.map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.name}
@@ -1570,15 +1579,15 @@ function ExportTab() {
         </div>
 
         {/* Estimate + action */}
-        <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        <div className="rounded-md bg-secondary px-4 py-3 text-sm text-muted-foreground">
           {l2 ? (
-            "Loading estimate..."
+            "Loading estimate…"
           ) : estimate === 0 ? (
             "No records match the current filters."
           ) : (
             <>
               Ready to export{" "}
-              <span className="font-semibold text-slate-900">
+              <span className="font-medium text-foreground">
                 {estimate.toLocaleString()}
               </span>{" "}
               row{estimate !== 1 ? "s" : ""}.
@@ -1600,7 +1609,7 @@ function ExportTab() {
         </Button>
 
         {lastExport && (
-          <p className="text-xs text-slate-400 text-center">
+          <p className="text-xs text-muted-foreground text-center">
             Last export: {lastExport}
           </p>
         )}
@@ -1619,6 +1628,7 @@ function MetadataTab() {
 
   // Load total count on mount
   useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any)
       .from("book_metadata")
       .select("id", { count: "exact", head: true })
@@ -1632,6 +1642,7 @@ function MetadataTab() {
     clearTimeout(searchRef.current);
     if (q.length < 2) { setResults([]); return; }
     searchRef.current = setTimeout(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data } = await (supabase as any)
         .from("book_metadata")
         .select("title, author, isbn, publisher, year, category")
@@ -1658,6 +1669,7 @@ function MetadataTab() {
       }
 
       if (ev.data.type === 'batch') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { error } = await (supabase as any).from('book_metadata').upsert(ev.data.batch, { onConflict: 'isbn' });
         if (error) console.error("Batch error:", error);
         setProgress(Math.round(ev.data.progress * 100));
@@ -1688,7 +1700,7 @@ function MetadataTab() {
   return (
     <div className="space-y-6">
       <SectionHeader
-        title="Reference Data"
+        title="Reference data"
         subtitle={
           count !== null
             ? `${count.toLocaleString()} books in the shared metadata pool`
@@ -1697,11 +1709,11 @@ function MetadataTab() {
       />
 
       {/* Import card */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-        <p className="text-sm font-semibold text-slate-700">Import from CSV</p>
-        <p className="text-sm text-slate-500">
+      <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+        <p className="text-sm font-medium text-foreground">Import from CSV</p>
+        <p className="text-sm text-muted-foreground">
           Upload a CSV with columns:{" "}
-          <code className="text-xs bg-slate-100 px-1 rounded">
+          <code className="text-xs bg-secondary px-1 rounded">
             book_title, author, isbn, publisher, year_published, category_name
           </code>
           . Existing ISBN matches will be updated.
@@ -1723,30 +1735,30 @@ function MetadataTab() {
             />
           </label>
           {importing && (
-            <Button variant="ghost" onClick={cancelImport} className="text-red-500 hover:text-red-600 hover:bg-red-50">
+            <Button variant="ghost" onClick={cancelImport} className="text-destructive hover:text-destructive hover:bg-destructive/10">
               Cancel
             </Button>
           )}
         </div>
         {progress !== null && importing && (
-          <div className="w-full bg-slate-100 rounded-full h-2 mt-2 overflow-hidden">
-            <div className="bg-blue-600 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+          <div className="w-full bg-secondary rounded-full h-1.5 mt-2 overflow-hidden">
+            <div className="bg-primary h-1.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
           </div>
         )}
       </div>
 
       {/* Search card */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-        <p className="text-sm font-semibold text-slate-700">Browse / verify</p>
+      <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+        <p className="text-sm font-medium text-foreground">Browse / verify</p>
         <Input
           placeholder="Search by title…"
           value={search}
           onChange={(e) => handleSearch(e.target.value)}
         />
         {results.length > 0 && (
-          <div className="overflow-x-auto rounded-lg border border-slate-100">
+          <div className="overflow-x-auto rounded-md border border-border">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <thead className="bg-secondary/50 text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 text-left">Title</th>
                   <th className="px-3 py-2 text-left">Author</th>
@@ -1757,12 +1769,12 @@ function MetadataTab() {
               </thead>
               <tbody>
                 {results.map((r, i) => (
-                  <tr key={i} className="border-t border-slate-100">
-                    <td className="px-3 py-2 font-medium">{r.title}</td>
-                    <td className="px-3 py-2 text-slate-500">{r.author || "—"}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{r.isbn || "—"}</td>
-                    <td className="px-3 py-2 text-slate-500">{r.publisher || "—"}</td>
-                    <td className="px-3 py-2 text-slate-500">{r.year || "—"}</td>
+                  <tr key={i} className="border-t border-border">
+                    <td className="px-3 py-2 font-medium text-foreground">{r.title}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{r.author || "—"}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{r.isbn || "—"}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{r.publisher || "—"}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{r.year || "—"}</td>
                   </tr>
                 ))}
               </tbody>

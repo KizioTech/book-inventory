@@ -272,14 +272,16 @@ function ScanPage() {
         try {
           // If the book has an ISBN, skip if it's already in the pool
           if (payload.isbn) {
-            const { data: existing } = await supabase
-              .from("book_metadata" as any)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: existing } = await (supabase as any)
+              .from("book_metadata")
               .select("id")
               .eq("isbn", payload.isbn)
               .maybeSingle();
             if (existing) return; // Already known — nothing to do
           }
-          await supabase.from("book_metadata" as any).upsert({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from("book_metadata").upsert({
             isbn:      payload.isbn,
             title:     payload.title || "",
             author:    payload.author,
@@ -374,7 +376,7 @@ function ScanPage() {
           <div className="flex items-center justify-between px-4 h-14 max-w-2xl mx-auto">
             <div className="flex items-center gap-3">
               <img src={logoImg} alt="Logo" className="h-6 w-auto object-contain" />
-              <h1 className="text-base font-bold text-primary tracking-tight">EduStock Malawi</h1>
+              <h1 className="text-base font-bold text-primary tracking-tight">FutecAI Book Inventory</h1>
             </div>
             <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-primary text-xs font-bold">
               {(profile?.full_name ?? "C").charAt(0).toUpperCase()}

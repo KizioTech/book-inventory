@@ -69,7 +69,7 @@ export function EditBookDialog({ book, onClose, onSaved }: Props) {
     <Dialog open={!!book} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Book</DialogTitle>
+          <DialogTitle>Edit book</DialogTitle>
           <DialogDescription>Update the details for this book.</DialogDescription>
         </DialogHeader>
         
@@ -142,7 +142,7 @@ export function EditBookDialog({ book, onClose, onSaved }: Props) {
             />
           </div>
           <div className="col-span-2 space-y-1.5">
-            <Label>Shelf Location</Label>
+            <Label>Shelf location</Label>
             <Input
               value={form.shelf_location || ""}
               onChange={(e) => setForm({ ...form, shelf_location: e.target.value })}
@@ -154,7 +154,7 @@ export function EditBookDialog({ book, onClose, onSaved }: Props) {
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={save} disabled={saving}>
             {saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-            Save Changes
+            Save changes
           </Button>
         </DialogFooter>
       </DialogContent>

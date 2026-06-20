@@ -15,6 +15,7 @@ interface Profile {
   full_name: string | null;
   email: string | null;
   active: boolean;
+  avatar_url: string | null;
 }
 
 interface AuthCtx {
@@ -41,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [{ data: p }, { data: r }] = await Promise.all([
       supabase
         .from("profiles")
-        .select("id, full_name, email, active")
+        .select("id, full_name, email, active, avatar_url")
         .eq("id", uid)
         .maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", uid),

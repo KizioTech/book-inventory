@@ -198,7 +198,7 @@ export function useBooksQuery(filters: BookFilters, page: number, pageSize: numb
 }
 
 // Used for "Today" books count or general quick counts
-export function useBooksCountQuery(filters: { since?: string; schoolId?: string; range?: string; countType?: 'rows' | 'sum' }) {
+export function useBooksCountQuery(filters: { since?: string; schoolId?: string; clerkId?: string; range?: string; countType?: 'rows' | 'sum' }) {
   return useQuery({
     queryKey: ["books_count", filters],
     queryFn: async () => {
@@ -207,6 +207,9 @@ export function useBooksCountQuery(filters: { since?: string; schoolId?: string;
       
       if (filters.schoolId && filters.schoolId !== "all") {
         q = q.eq("school_id", filters.schoolId);
+      }
+      if (filters.clerkId && filters.clerkId !== "all") {
+        q = q.eq("clerk_id", filters.clerkId);
       }
       if (filters.since) {
         q = q.gte("created_at", filters.since);

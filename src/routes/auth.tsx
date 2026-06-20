@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { BookOpen, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,20 +73,20 @@ function AuthPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-background to-secondary/40 px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="mb-6 flex flex-col items-center justify-center gap-2">
-          <div className="flex flex-col items-center gap-3">
-            <img src={logoImg} alt="FutecAI Logo" className="h-16 object-contain" />
-            <h1 className="text-2xl font-bold tracking-tight text-primary">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 flex flex-col items-center gap-3">
+          <img src={logoImg} alt="FutecAI Logo" className="h-12 object-contain" />
+          <div className="text-center">
+            <h1 className="text-page-title text-foreground">
               Book Inventory
             </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              FutecAI Limited Company
+            </p>
           </div>
-          <p className="text-sm text-slate-500 font-medium">
-            FutecAI Limited Company
-          </p>
         </div>
-        <Card className="rounded-2xl shadow-sm border border-slate-200">
+        <Card>
           <CardContent className="pt-6">
             <form onSubmit={handleSignIn} className="space-y-4">
               <div className="space-y-1.5">
@@ -97,7 +97,7 @@ function AuthPage() {
                   type="email"
                   required
                   autoComplete="email"
-                  className="rounded-xl px-4 py-3 h-auto"
+                  className="h-10"
                 />
               </div>
               <div className="space-y-1.5 relative">
@@ -109,17 +109,17 @@ function AuthPage() {
                     type={showPassword ? "text" : "password"}
                     required
                     autoComplete="current-password"
-                    className="rounded-xl px-4 py-3 h-auto pr-10"
+                    className="h-10 pr-10"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
                   >
                     {showPassword ? (
-                      <EyeOff className="h-5 w-5" />
+                      <EyeOff className="h-4 w-4" />
                     ) : (
-                      <Eye className="h-5 w-5" />
+                      <Eye className="h-4 w-4" />
                     )}
                   </button>
                 </div>
@@ -127,23 +127,23 @@ function AuthPage() {
 
               <Button
                 type="submit"
-                className="w-full rounded-xl py-6 bg-blue-600 hover:bg-blue-700 text-white"
+                className="w-full h-10"
                 disabled={busy}
               >
-                {busy ? "Signing in…" : "Sign In"}
+                {busy ? "Signing in…" : "Sign in"}
               </Button>
 
               {errorMsg && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm text-center">
+                <div className="rounded-md border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive">
                   {errorMsg}
                 </div>
               )}
 
-              <div className="text-center pt-2">
+              <div className="text-center pt-1">
                 <button
                   type="button"
                   onClick={handleForgotPassword}
-                  className="text-sm text-slate-500 hover:text-slate-700 font-medium"
+                  className="text-sm text-muted-foreground hover:text-foreground font-medium"
                 >
                   Forgot your password?
                 </button>

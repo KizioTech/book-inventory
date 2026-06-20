@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { BookOpen } from "lucide-react";
 
 import logoImg from "@/assets/blue-logo.png";
 
@@ -20,7 +19,7 @@ function Index() {
     } else if (role === "super_admin" || role === "admin") {
       navigate({ to: "/admin" });
     } else {
-      navigate({ to: "/scan" });
+      navigate({ to: "/clerk" });
     }
   }, [user, role, loading, navigate]);
 

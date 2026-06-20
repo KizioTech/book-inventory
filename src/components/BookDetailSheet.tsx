@@ -26,7 +26,7 @@ export function BookDetailSheet({ book, onClose, onEdit }: Props) {
   
   return (
     <Sheet open={!!book} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="h-[80vh] overflow-y-auto rounded-t-2xl">
+      <SheetContent side="bottom" className="h-[80vh] overflow-y-auto rounded-t-xl">
         <SheetHeader>
           <SheetTitle>{book.title || 'Untitled'}</SheetTitle>
           <SheetDescription>Added on {new Date(book.created_at).toLocaleDateString()}</SheetDescription>
@@ -44,7 +44,7 @@ export function BookDetailSheet({ book, onClose, onEdit }: Props) {
           </div>
         </dl>
         <Button className="mt-6 w-full" onClick={() => onEdit(book)}>
-          Edit Book
+          Edit book
         </Button>
       </SheetContent>
     </Sheet>
@@ -54,8 +54,8 @@ export function BookDetailSheet({ book, onClose, onEdit }: Props) {
 function Detail({ label, value }: { label: string; value?: string | number | null }) {
   return (
     <div className="flex flex-col gap-1">
-      <dt className="font-medium text-slate-500">{label}</dt>
-      <dd>{value || <span className="text-slate-300">—</span>}</dd>
+      <dt className="text-eyebrow">{label}</dt>
+      <dd className="text-foreground">{value || <span className="text-muted-foreground/60">—</span>}</dd>
     </div>
   );
 }

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ScanRouteImport } from './routes/scan'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as ClerkRouteImport } from './routes/clerk'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
@@ -23,6 +24,11 @@ const ScanRoute = ScanRouteImport.update({
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClerkRoute = ClerkRouteImport.update({
+  id: '/clerk',
+  path: '/clerk',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
+  '/clerk': typeof ClerkRoute
   '/reset-password': typeof ResetPasswordRoute
   '/scan': typeof ScanRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
+  '/clerk': typeof ClerkRoute
   '/reset-password': typeof ResetPasswordRoute
   '/scan': typeof ScanRoute
 }
@@ -60,21 +68,30 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
+  '/clerk': typeof ClerkRoute
   '/reset-password': typeof ResetPasswordRoute
   '/scan': typeof ScanRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/auth' | '/reset-password' | '/scan'
+  fullPaths: '/' | '/admin' | '/auth' | '/clerk' | '/reset-password' | '/scan'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/auth' | '/reset-password' | '/scan'
-  id: '__root__' | '/' | '/admin' | '/auth' | '/reset-password' | '/scan'
+  to: '/' | '/admin' | '/auth' | '/clerk' | '/reset-password' | '/scan'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/auth'
+    | '/clerk'
+    | '/reset-password'
+    | '/scan'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   AuthRoute: typeof AuthRoute
+  ClerkRoute: typeof ClerkRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ScanRoute: typeof ScanRoute
 }
@@ -93,6 +110,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clerk': {
+      id: '/clerk'
+      path: '/clerk'
+      fullPath: '/clerk'
+      preLoaderRoute: typeof ClerkRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -123,6 +147,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   AuthRoute: AuthRoute,
+  ClerkRoute: ClerkRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ScanRoute: ScanRoute,
 }
