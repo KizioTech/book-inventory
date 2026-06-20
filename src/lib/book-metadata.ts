@@ -19,7 +19,7 @@ export async function lookupMetadataByIsbn(
   const clean = isbn.replace(/[^0-9Xx]/g, "");
   if (clean.length < 10) return null;
 
-  const { data } = await supabase
+  const { data } = await (supabase as any)
     .from("book_metadata")
     .select("title, author, publisher, year, category")
     .eq("isbn", clean)
@@ -46,7 +46,7 @@ export async function searchMetadataByTitle(
 ): Promise<BookMeta[]> {
   if (query.trim().length < 2) return [];
 
-  let request = supabase
+  let request = (supabase as any)
     .from("book_metadata")
     .select("title, author, publisher, year, category")
     .ilike("title", `%${query.trim()}%`)
@@ -58,7 +58,7 @@ export async function searchMetadataByTitle(
 
   const { data } = await request;
 
-  return (data ?? []).map((d) => ({
+  return ((data ?? []) as any[]).map((d) => ({
     title:     d.title     ?? "",
     author:    d.author    ?? "",
     publisher: d.publisher ?? "",
