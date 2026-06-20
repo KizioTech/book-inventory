@@ -471,22 +471,31 @@ function ScanPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-3 pb-16">
-      <header className="sticky top-0 z-10 -mx-3 mb-3 border-b bg-background/95 px-3 py-2 backdrop-blur">
+      <header className="sticky top-0 z-10 -mx-3 mb-4 border-b border-border bg-card/95 px-4 py-2.5 backdrop-blur shadow-sm">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2.5">
             <MapPin className="h-4 w-4 shrink-0 text-primary" />
-            <span className="truncate text-sm font-medium">
-              {activeSchool?.name}
-            </span>
-            <Badge variant="secondary" className="ml-2 font-mono" title={`${scanCount} entries · ${totalBooks} books`}>
-              {scanCount}/{totalBooks}
-            </Badge>
-
+            <div className="min-w-0">
+              <div className="truncate text-sm font-bold text-primary leading-tight">
+                {activeSchool?.name}
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-success">
+                  Session active
+                </span>
+              </div>
+            </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => signOut()}>
-            <LogOut className="mr-1 h-4 w-4" />
-            Log out
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <div className="bg-primary text-primary-foreground px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
+              <BookOpen className="h-3.5 w-3.5" />
+              <span className="text-xs font-bold">{scanCount}/{totalBooks}</span>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => signOut()} title="Log out">
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </header>
 
