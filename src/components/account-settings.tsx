@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Loader2, Camera, KeyRound, User, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { GlassCard } from "@/components/ui/glass-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -27,13 +28,6 @@ export function AccountSettings() {
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
-
-  const initials = (profile?.full_name ?? profile?.email ?? "U")
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .substring(0, 2)
-    .toUpperCase();
 
   const handleAvatarClick = () => fileInputRef.current?.click();
 
@@ -156,7 +150,7 @@ export function AccountSettings() {
       </div>
 
       {/* Profile Photo */}
-      <Card>
+      <GlassCard tilt={false}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Camera className="h-4 w-4 text-muted-foreground" />
@@ -175,7 +169,7 @@ export function AccountSettings() {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <span className="text-2xl font-bold text-muted-foreground">{initials}</span>
+                  <User className="h-8 w-8 text-muted-foreground" />
                 )}
               </div>
               {uploadingAvatar && (
@@ -220,10 +214,10 @@ export function AccountSettings() {
             </div>
           </div>
         </CardContent>
-      </Card>
+      </GlassCard>
 
       {/* Profile Details */}
-      <Card>
+      <GlassCard tilt={false}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <User className="h-4 w-4 text-muted-foreground" />
@@ -263,10 +257,10 @@ export function AccountSettings() {
             Save Changes
           </Button>
         </CardContent>
-      </Card>
+      </GlassCard>
 
       {/* Password */}
-      <Card>
+      <GlassCard tilt={false}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <KeyRound className="h-4 w-4 text-muted-foreground" />
@@ -335,12 +329,12 @@ export function AccountSettings() {
             Update Password
           </Button>
         </CardContent>
-      </Card>
+      </GlassCard>
 
       <Separator />
 
       {/* Danger Zone */}
-      <Card className="border-destructive/30">
+      <GlassCard tilt={false} className="border-destructive/30">
         <CardHeader>
           <CardTitle className="text-base text-destructive">Danger Zone</CardTitle>
           <CardDescription>
@@ -359,7 +353,7 @@ export function AccountSettings() {
             Sign Out
           </Button>
         </CardContent>
-      </Card>
+      </GlassCard>
     </div>
   );
 }

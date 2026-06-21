@@ -5,6 +5,7 @@ import {
   ScanLine,
   Menu,
   X,
+  User,
 } from "lucide-react";
 import logoImg from "@/assets/blue-logo.png";
 import { useNavigate } from "@tanstack/react-router";
@@ -126,12 +127,6 @@ const Header = ({
   mobileOpen: boolean;
 }) => {
   const { profile } = useAuth();
-  const initials = (userFullName ?? "U")
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .substring(0, 2)
-    .toUpperCase();
 
   return (
     <header className="flex h-14 items-center justify-between border-b border-border bg-card px-4 md:px-8">
@@ -152,7 +147,7 @@ const Header = ({
           {profile?.avatar_url ? (
             <img src={profile.avatar_url} alt="Avatar" className="h-full w-full object-cover" />
           ) : (
-            initials
+            <User className="h-4 w-4" />
           )}
         </div>
       </div>

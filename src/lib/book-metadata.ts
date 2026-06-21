@@ -9,6 +9,32 @@ export interface BookMeta {
   isbn?: string | null;
 }
 
+/** Raw shape of a row returned from the book_metadata table. */
+interface BookMetaRow {
+  title: string | null;
+  author: string | null;
+  publisher: string | null;
+  year: string | null;
+  category: string | null;
+  isbn: string | null;
+}
+
+function rowToBookMeta(d: BookMetaRow): BookMeta {
+  return {
+    title:     d.title     ?? "",
+    author:    d.author    ?? "",
+    publisher: d.publisher ?? "",
+    year:      d.year      ?? "",
+    category:  d.category  ?? "",
+    isbn:      d.isbn      ?? "",
+  };
+}
+
+// book_metadata is not yet in the generated Supabase types; cast the
+// client once here so downstream call-sites stay fully typed.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
 /**
  * Look up a book by ISBN in the local Supabase metadata pool.
  * Returns null when not found.
@@ -19,20 +45,14 @@ export async function lookupMetadataByIsbn(
   const clean = isbn.replace(/[^0-9Xx]/g, "");
   if (clean.length < 10) return null;
 
-  const { data } = await (supabase as any)
+  const { data } = (await db
     .from("book_metadata")
-    .select("title, author, publisher, year, category")
+    .select("title, author, publisher, year, category, isbn")
     .eq("isbn", clean)
-    .maybeSingle();
+    .maybeSingle()) as { data: BookMetaRow | null };
 
   if (!data) return null;
-  return {
-    title:     data.title     ?? "",
-    author:    data.author    ?? "",
-    publisher: data.publisher ?? "",
-    year:      data.year      ?? "",
-    category:  data.category  ?? "",
-  };
+  return rowToBookMeta(data);
 }
 
 /**
@@ -46,9 +66,9 @@ export async function searchMetadataByTitle(
 ): Promise<BookMeta[]> {
   if (query.trim().length < 2) return [];
 
-  let request = (supabase as any)
+  let request = db
     .from("book_metadata")
-    .select("title, author, publisher, year, category")
+    .select("title, author, publisher, year, category, isbn")
     .ilike("title", `%${query.trim()}%`)
     .limit(limit);
 
@@ -56,13 +76,7 @@ export async function searchMetadataByTitle(
     request = request.abortSignal(signal);
   }
 
-  const { data } = await request;
+  const { data } = (await request) as { data: BookMetaRow[] | null };
 
-  return ((data ?? []) as any[]).map((d) => ({
-    title:     d.title     ?? "",
-    author:    d.author    ?? "",
-    publisher: d.publisher ?? "",
-    year:      d.year      ?? "",
-    category:  d.category  ?? "",
-  }));
+  return (data ?? []).map(rowToBookMeta);
 }

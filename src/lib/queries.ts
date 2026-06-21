@@ -163,6 +163,7 @@ export interface BookFilters {
   schoolId?: string;
   clerkId?: string;
   condition?: string;
+  search?: string;
 }
 
 export function useBooksQuery(filters: BookFilters, page: number, pageSize: number) {
@@ -183,6 +184,9 @@ export function useBooksQuery(filters: BookFilters, page: number, pageSize: numb
       }
       if (filters.condition && filters.condition !== "all") {
         q = q.eq("condition", filters.condition);
+      }
+      if (filters.search) {
+        q = q.or(`title.ilike.%${filters.search}%,author.ilike.%${filters.search}%,isbn.ilike.%${filters.search}%`);
       }
 
       const { data, count, error } = await q;
@@ -226,7 +230,7 @@ export function useBooksCountQuery(filters: { since?: string; schoolId?: string;
       if (error) throw error;
       
       if (type === 'sum') {
-        return (data || []).reduce((sum, row) => sum + (Number((row as any).quantity) || 0), 0);
+        return (data || []).reduce((sum, row) => sum + (Number((row as { quantity?: number | string }).quantity) || 0), 0);
       } else {
         return count ?? 0;
       }

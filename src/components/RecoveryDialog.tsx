@@ -62,7 +62,7 @@ export function RecoveryDialog({ data, onResolved }: Props) {
         </dl>
 
         {confirmDiscard ? (
-          <div className="rounded-md border border-accent/25 bg-accent/[0.06] p-3 text-sm text-foreground">
+          <div className="rounded-md border border-accent/25 bg-accent/6 p-3 text-sm text-foreground">
             This record will be permanently lost. Are you sure?
             <div className="mt-2 flex gap-2">
               <Button size="sm" variant="destructive" onClick={onResolved}>

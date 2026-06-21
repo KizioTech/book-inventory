@@ -16,6 +16,7 @@ import {
   ChevronRight,
   UserX,
   User,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -202,6 +203,7 @@ function SectionHeader({
 // ---------------- Schools tab ----------------
 
 function SchoolsTab() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: schools = [], isLoading: loadingSchools } = useSchoolsQuery();
   const { data: stats = [], isLoading: loadingStats } = useSchoolStatsQuery();
@@ -319,7 +321,7 @@ function SchoolsTab() {
           return (
             <GlassCard key={s.id} className="p-5">
               <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-inner">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-primary to-primary/70 text-primary-foreground shadow-inner">
                   <SchoolIcon size={18} />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -349,6 +351,15 @@ function SchoolsTab() {
                 </span>
               </div>
               <div className="mt-4 flex justify-end gap-1">
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="mr-auto"
+                  onClick={() => navigate({ to: `/explore/${s.id}` })}
+                >
+                  <Search className="mr-1 h-4 w-4" />
+                  Explore
+                </Button>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -635,7 +646,7 @@ function UsersTab() {
               className={`p-4 ${!u.active ? "opacity-60" : ""}`}
             >
               <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-xs font-semibold text-primary-foreground shadow-inner">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-primary to-primary/70 text-xs font-semibold text-primary-foreground shadow-inner">
                   {initials}
                 </div>
                 <div className="min-w-0 flex-1">

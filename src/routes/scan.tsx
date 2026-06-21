@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, LogOut, MapPin, Save, Trash2, Download, Search, Info, ChevronDown, ChevronUp } from "lucide-react";
+import { BookOpen, LogOut, MapPin, Save, Trash2, Download, Search, Info, ChevronDown, ChevronUp, User, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -206,7 +206,7 @@ function ScanPage() {
       } catch (err) {
         if (err instanceof Error && err.name !== 'AbortError') throw err;
       }
-    }, 300);
+    }, 150);
   };
 
   useEffect(() => {
@@ -379,8 +379,12 @@ function ScanPage() {
               <img src={logoImg} alt="Logo" className="h-6 w-auto object-contain" />
               <h1 className="text-base font-bold text-primary tracking-tight">FutecAI Book Inventory</h1>
             </div>
-            <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-primary text-xs font-bold">
-              {(profile?.full_name ?? "C").charAt(0).toUpperCase()}
+            <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-primary text-xs font-bold overflow-hidden">
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <User className="h-4 w-4" />
+              )}
             </div>
           </div>
         </header>
@@ -422,7 +426,7 @@ function ScanPage() {
                     className="w-full p-4 text-left active:scale-[0.98]"
                   >
                     <div className="flex items-center">
-                      <div className="mr-3 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-inner">
+                      <div className="mr-3 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-primary to-primary/70 text-primary-foreground shadow-inner">
                         <MapPin className="h-5 w-5" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -477,6 +481,15 @@ function ScanPage() {
       <header className="sticky top-0 z-10 -mx-3 mb-4 border-b border-border bg-card/95 px-4 py-2.5 backdrop-blur shadow-sm">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:bg-muted/50 shrink-0"
+              onClick={() => navigate({ to: role === "super_admin" || role === "admin" ? "/admin" : "/clerk" })}
+              title="Back to Dashboard"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
             <MapPin className="h-4 w-4 shrink-0 text-primary" />
             <div className="min-w-0">
               <div className="truncate text-sm font-bold text-primary leading-tight">
@@ -542,7 +555,7 @@ function ScanPage() {
       )}
 
       {step === "scan" ? (
-        <Card className="mb-4">
+        <GlassCard tilt={false} className="mb-4">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Book details</CardTitle>
           </CardHeader>
@@ -581,7 +594,7 @@ function ScanPage() {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </GlassCard>
       ) : step === "review" ? (
         <section className="mb-4 space-y-4">
           {/* Progress indicator */}
@@ -644,7 +657,7 @@ function ScanPage() {
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  ISBN <span className="text-muted-foreground/60 font-normal normal-case">(optional)</span>
+                  ISBN <span className="text-destructive normal-case">*</span>
                 </Label>
                 <Input
                   value={form.isbn}
@@ -680,7 +693,7 @@ function ScanPage() {
                               author: s.author || f.author,
                               publisher: s.publisher || f.publisher,
                               year: s.year || f.year,
-                              isbn: s.isbn || f.isbn,
+                              isbn: f.isbn || s.isbn || "",
                               category: s.category || f.category
                             }));
                             setTitleSuggestions([]);
@@ -903,7 +916,7 @@ function ScanPage() {
         </section>
       )}
 
-      <Card>
+      <GlassCard tilt={false}>
         <CardHeader 
           className="flex flex-row items-center justify-between space-y-0 pb-2 cursor-pointer hover:bg-slate-50 transition-colors rounded-t-xl"
           onClick={() => setRecordsExpanded(!recordsExpanded)}
@@ -1022,7 +1035,7 @@ function ScanPage() {
 
         </CardContent>
         )}
-      </Card>
+      </GlassCard>
 
       <BookDetailSheet 
         book={detailBook} 

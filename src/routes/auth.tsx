@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
+import { GlassCard } from "@/components/ui/glass-card";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import logoImg from "@/assets/blue-logo.png";
@@ -73,7 +73,7 @@ function AuthPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center px-4 py-12" style={{ background: "linear-gradient(135deg, #e8edf5 0%, #f5f3ee 50%, #eef0f5 100%)" }}>
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-3">
           <img src={logoImg} alt="FutecAI Logo" className="h-12 object-contain" />
@@ -86,8 +86,7 @@ function AuthPage() {
             </p>
           </div>
         </div>
-        <Card>
-          <CardContent className="pt-6">
+        <GlassCard tilt={false} className="p-6">
             <form onSubmit={handleSignIn} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="si-email">Email address</Label>
@@ -149,8 +148,7 @@ function AuthPage() {
                 </button>
               </div>
             </form>
-          </CardContent>
-        </Card>
+        </GlassCard>
       </div>
     </div>
   );

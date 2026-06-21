@@ -6,11 +6,13 @@ import {
   Trash2,
   School as SchoolIcon,
   User,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/ui/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { GlassCard } from "@/components/ui/glass-card";
 import { AccountSettings } from "@/components/account-settings";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
@@ -93,7 +95,7 @@ function SummaryCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4 flex items-center justify-between shadow-sm">
+    <GlassCard tilt={false} className="p-4 flex items-center justify-between">
       <div>
         <div className="text-sm font-medium text-muted-foreground">{label}</div>
         <div className="mt-1 text-2xl font-bold text-foreground">{value}</div>
@@ -101,7 +103,7 @@ function SummaryCard({
       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         {icon}
       </div>
-    </div>
+    </GlassCard>
   );
 }
 
@@ -151,7 +153,7 @@ function ClerkDashboardTab({ userId, role }: { userId: string; role: string }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+        <GlassCard tilt={false}>
           <CardHeader>
             <CardTitle>My Assigned Schools</CardTitle>
           </CardHeader>
@@ -161,17 +163,28 @@ function ClerkDashboardTab({ userId, role }: { userId: string; role: string }) {
             ) : (
               <ul className="space-y-3">
                 {schools.map(s => (
-                  <li key={s.id} className="flex items-center justify-between p-3 border border-border rounded-lg bg-card">
-                    <span className="font-medium text-sm">{s.name}</span>
-                    <SchoolIcon className="h-4 w-4 text-muted-foreground" />
+                  <li key={s.id} className="flex items-center justify-between p-3 border border-border rounded-lg bg-card group">
+                    <div className="flex items-center gap-2">
+                      <SchoolIcon className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-sm">{s.name}</span>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 text-primary"
+                      onClick={() => navigate({ to: `/explore/${s.id}` })}
+                    >
+                      <Search className="h-3.5 w-3.5 mr-1" />
+                      Explore
+                    </Button>
                   </li>
                 ))}
               </ul>
             )}
           </CardContent>
-        </Card>
+        </GlassCard>
 
-        <Card>
+        <GlassCard tilt={false}>
           <CardHeader>
             <CardTitle>Recent Scans</CardTitle>
           </CardHeader>
@@ -194,7 +207,7 @@ function ClerkDashboardTab({ userId, role }: { userId: string; role: string }) {
               </ul>
             )}
           </CardContent>
-        </Card>
+        </GlassCard>
       </div>
     </div>
   );
@@ -246,7 +259,7 @@ function ClerkRecordsTab({ userId }: { userId: string }) {
         <h1 className="text-2xl font-bold text-foreground">My Records</h1>
       </div>
 
-      <Card>
+      <GlassCard tilt={false}>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -326,7 +339,7 @@ function ClerkRecordsTab({ userId }: { userId: string }) {
             </div>
           )}
         </CardContent>
-      </Card>
+      </GlassCard>
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
         <AlertDialogContent>

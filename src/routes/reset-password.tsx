@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
+import { GlassCard } from "@/components/ui/glass-card";
 import { supabase } from "@/integrations/supabase/client";
 import logoImg from "@/assets/blue-logo.png";
 
@@ -71,9 +71,8 @@ function ResetPasswordPage() {
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-sm">
-          <CardContent className="pt-8 pb-8 text-center space-y-3">
+      <div className="flex min-h-screen items-center justify-center px-4" style={{ background: "linear-gradient(135deg, #e8edf5 0%, #f5f3ee 50%, #eef0f5 100%)" }}>
+        <GlassCard tilt={false} className="w-full max-w-sm p-8 text-center space-y-3">
             <KeyRound className="mx-auto h-8 w-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
               Waiting for your reset link…
@@ -89,14 +88,13 @@ function ResetPasswordPage() {
             >
               Back to sign in
             </Button>
-          </CardContent>
-        </Card>
+        </GlassCard>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center px-4 py-12" style={{ background: "linear-gradient(135deg, #e8edf5 0%, #f5f3ee 50%, #eef0f5 100%)" }}>
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-3">
           <img
@@ -112,8 +110,7 @@ function ResetPasswordPage() {
           </div>
         </div>
 
-        <Card>
-          <CardContent className="pt-6">
+        <GlassCard tilt={false} className="p-6">
             <form onSubmit={submit} className="space-y-4">
               {error && (
                 <div className="rounded-md border border-destructive/25 bg-destructive/10 p-3 text-center text-sm text-destructive">
@@ -169,8 +166,7 @@ function ResetPasswordPage() {
                 {busy ? "Updating…" : "Set new password"}
               </Button>
             </form>
-          </CardContent>
-        </Card>
+        </GlassCard>
       </div>
     </div>
   );
