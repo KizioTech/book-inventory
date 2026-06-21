@@ -66,7 +66,7 @@ export function AccountSettings() {
 
       const { error: updateError } = await supabase
         .from("profiles")
-        .update({ avatar_url: publicUrl })
+        .update({ avatar_url: publicUrl } as never)
         .eq("id", user.id);
 
       if (updateError) throw updateError;
@@ -88,7 +88,7 @@ export function AccountSettings() {
     try {
       const { error } = await supabase
         .from("profiles")
-        .update({ avatar_url: null })
+        .update({ avatar_url: null } as never)
         .eq("id", user.id);
       if (error) throw error;
       setAvatarUrl(null);

@@ -44,6 +44,7 @@ export const Route = createFileRoute("/scan")({
 
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useAssignedSchoolsQuery, type School, type BookRow } from "@/lib/queries";
+import { GlassCard } from "@/components/ui/glass-card";
 
 const empty = {
   isbn: "",
@@ -412,31 +413,31 @@ function ScanPage() {
               schools.map((s) => {
                 const selected = schoolId === s.id;
                 return (
-                  <button
+                  <GlassCard
+                    as="button"
                     key={s.id}
                     type="button"
                     onClick={() => setSchoolId(s.id)}
-                    className={`w-full flex items-center p-4 bg-card border rounded-xl shadow-sm transition-all active:scale-[0.98] text-left ${
-                      selected
-                        ? "border-primary bg-secondary ring-2 ring-primary/20"
-                        : "border-border hover:border-primary/40"
-                    }`}
+                    selected={selected}
+                    className="w-full p-4 text-left active:scale-[0.98]"
                   >
-                    <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center mr-3 shrink-0">
-                      <MapPin className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-foreground truncate">{s.name}</h3>
-                      {s.district && (
-                        <p className="text-xs text-muted-foreground truncate">{s.district}</p>
+                    <div className="flex items-center">
+                      <div className="mr-3 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-inner">
+                        <MapPin className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate text-sm font-semibold text-foreground">{s.name}</h3>
+                        {s.district && (
+                          <p className="truncate text-xs text-muted-foreground">{s.district}</p>
+                        )}
+                      </div>
+                      {selected && (
+                        <div className="ml-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                          ✓
+                        </div>
                       )}
                     </div>
-                    {selected && (
-                      <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0 ml-2">
-                        ✓
-                      </div>
-                    )}
-                  </button>
+                  </GlassCard>
                 );
               })
             )}
