@@ -44,6 +44,7 @@ export const Route = createFileRoute("/scan")({
 
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useAssignedSchoolsQuery, type School, type BookRow } from "@/lib/queries";
+import { GlassCard } from "@/components/ui/glass-card";
 
 const empty = {
   isbn: "",
