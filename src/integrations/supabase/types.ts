@@ -14,39 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      book_metadata: {
-        Row: {
-          author: string | null
-          category: string | null
-          created_at: string
-          id: string
-          isbn: string | null
-          publisher: string | null
-          title: string
-          year: string | null
-        }
-        Insert: {
-          author?: string | null
-          category?: string | null
-          created_at?: string
-          id?: string
-          isbn?: string | null
-          publisher?: string | null
-          title: string
-          year?: string | null
-        }
-        Update: {
-          author?: string | null
-          category?: string | null
-          created_at?: string
-          id?: string
-          isbn?: string | null
-          publisher?: string | null
-          title?: string
-          year?: string | null
-        }
-        Relationships: []
-      }
       books: {
         Row: {
           author: string | null
@@ -146,7 +113,6 @@ export type Database = {
       profiles: {
         Row: {
           active: boolean
-          avatar_url: string | null
           created_at: string
           email: string | null
           full_name: string | null
@@ -154,7 +120,6 @@ export type Database = {
         }
         Insert: {
           active?: boolean
-          avatar_url?: string | null
           created_at?: string
           email?: string | null
           full_name?: string | null
@@ -162,7 +127,6 @@ export type Database = {
         }
         Update: {
           active?: boolean
-          avatar_url?: string | null
           created_at?: string
           email?: string | null
           full_name?: string | null
@@ -230,7 +194,6 @@ export type Database = {
         Args: { _school_id: string; _user_id: string }
         Returns: boolean
       }
-      custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       get_school_stats: {
         Args: never
         Returns: {
@@ -248,8 +211,6 @@ export type Database = {
         Returns: boolean
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
-      show_limit: { Args: never; Returns: number }
-      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       app_role: "super_admin" | "admin" | "clerk"
