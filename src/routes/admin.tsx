@@ -72,6 +72,7 @@ import {
 } from "@/lib/queries";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { type BookMeta } from "@/lib/book-metadata";
+import { GlassCard } from "@/components/ui/glass-card";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
@@ -316,14 +317,18 @@ function SchoolsTab() {
         {schools.map((s) => {
           const status = schoolStatus(s.active, lastEntries[s.id]);
           return (
-            <div
-              key={s.id}
-              className="rounded-lg border border-border bg-card p-5"
-            >
-              <div className="font-medium text-foreground">{s.name}</div>
-              <div className="text-sm text-muted-foreground">
-                {s.district ?? "—"}
-                {s.region ? ` · ${s.region}` : ""}
+            <GlassCard key={s.id} className="p-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-inner">
+                  <SchoolIcon size={18} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium text-foreground">{s.name}</div>
+                  <div className="truncate text-sm text-muted-foreground">
+                    {s.district ?? "—"}
+                    {s.region ? ` · ${s.region}` : ""}
+                  </div>
+                </div>
               </div>
               <div className="mt-3 flex gap-4 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1.5">
@@ -372,7 +377,7 @@ function SchoolsTab() {
                   Delete
                 </Button>
               </div>
-            </div>
+            </GlassCard>
           );
         })}
         {schools.length === 0 && (
