@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadProfile = async (uid: string) => {
     const [{ data: p }, { data: r }] = await Promise.all([
-      supabase
+      (supabase as any)
         .from("profiles")
         .select("id, full_name, email, active, avatar_url")
         .eq("id", uid)
