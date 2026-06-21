@@ -630,14 +630,12 @@ function UsersTab() {
             .join("")
             .toUpperCase();
           return (
-            <div
+            <GlassCard
               key={u.id}
-              className={`rounded-lg border border-border bg-card p-4 ${
-                !u.active ? "opacity-60" : ""
-              }`}
+              className={`p-4 ${!u.active ? "opacity-60" : ""}`}
             >
               <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-primary">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-xs font-semibold text-primary-foreground shadow-inner">
                   {initials}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -703,7 +701,7 @@ function UsersTab() {
                   )}
                 </div>
               </div>
-            </div>
+            </GlassCard>
           );
         })}
       </div>
