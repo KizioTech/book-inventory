@@ -58,6 +58,17 @@ const empty = {
   shelf_location: "",
 };
 
+const BOOK_CATEGORIES = [
+  "Arts",
+  "History",
+  "Fiction",
+  "Non-Fiction",
+  "Mathematics",
+  "Literature",
+  "Science",
+  "Technology",
+] as const;
+
 function ScanPage() {
   const { user, profile, role, loading, signOut } = useAuth();
   const navigate = useNavigate();
@@ -871,12 +882,21 @@ function ScanPage() {
               <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 Category <span className="text-muted-foreground/60 font-normal normal-case">(optional)</span>
               </Label>
-              <Input
+              <Select
                 value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
-                placeholder="e.g., Mathematics, English"
-                className="h-11 rounded-lg"
-              />
+                onValueChange={(value) => setForm({ ...form, category: value })}
+              >
+                <SelectTrigger className="h-11 rounded-lg">
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {BOOK_CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Shelf with icon */}

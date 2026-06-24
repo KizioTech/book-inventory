@@ -108,6 +108,7 @@ function SummaryCard({
 }
 
 function ClerkDashboardTab({ userId, role }: { userId: string; role: string }) {
+  const navigate = useNavigate();
   const { data: schools = [], isLoading: loadingSchools } = useAssignedSchoolsQuery(userId, role);
   
   const { data: totalBooksCount = 0 } = useBooksCountQuery({

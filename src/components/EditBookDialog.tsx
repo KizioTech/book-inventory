@@ -16,6 +16,17 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { BookDetail } from "./BookDetailSheet";
 
+const BOOK_CATEGORIES = [
+  "Arts",
+  "History",
+  "Fiction",
+  "Non-Fiction",
+  "Mathematics",
+  "Literature",
+  "Science",
+  "Technology",
+] as const;
+
 interface Props {
   book: BookDetail | null;
   onClose: () => void;
@@ -136,10 +147,21 @@ export function EditBookDialog({ book, onClose, onSaved }: Props) {
           </div>
           <div className="space-y-1.5">
             <Label>Category</Label>
-            <Input
+            <Select
               value={form.category || ""}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-            />
+              onValueChange={(v) => setForm({ ...form, category: v })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a category" />
+              </SelectTrigger>
+              <SelectContent>
+                {BOOK_CATEGORIES.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="col-span-2 space-y-1.5">
             <Label>Shelf location</Label>
