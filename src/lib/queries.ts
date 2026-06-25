@@ -51,6 +51,7 @@ export interface BookRow {
   school_id: string;
   clerk_id: string;
   created_at: string;
+  flagged_as_duplicate?: boolean;
 }
 
 // --- Queries ---
@@ -237,4 +238,60 @@ export function useBooksCountQuery(filters: { since?: string; schoolId?: string;
     },
     staleTime: 30_000,
   });
+}
+
+export function useAllBooksQuery() {
+  return useQuery({
+    queryKey: ["all_books"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("books")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(10000);
+      if (error) throw error;
+      return (data as BookRow[]) ?? [];
+    },
+    staleTime: 60_000,
+  });
+}
+
+/** Fetches all records that match a specific duplicate group (title + author + school). */
+export function useDuplicateGroupQuery(
+  params: { title: string; author: string; schoolId: string } | null
+) {
+  return useQuery({
+    queryKey: ["duplicate_group", params],
+    queryFn: async () => {
+      if (!params) return [];
+      const { data, error } = await supabase
+        .from("books")
+        .select("*")
+        .ilike("title", params.title)
+        .ilike("author", params.author)
+        .eq("school_id", params.schoolId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data as BookRow[]) ?? [];
+    },
+    enabled: !!params,
+    staleTime: 0, // always fresh when resolving
+  });
+}
+
+/** Checks if a book (title + author + school) already exists — used for scan-time duplicate detection. */
+export async function checkDuplicateExists(
+  title: string,
+  author: string,
+  schoolId: string
+): Promise<BookRow[]> {
+  const { data, error } = await supabase
+    .from("books")
+    .select("id, title, author, quantity, condition, created_at, clerk_id, school_id, isbn, publisher, year, category, shelf_location, flagged_as_duplicate")
+    .ilike("title", title.trim())
+    .ilike("author", author.trim())
+    .eq("school_id", schoolId)
+    .limit(5);
+  if (error) return [];
+  return (data as unknown as BookRow[]) ?? [];
 }

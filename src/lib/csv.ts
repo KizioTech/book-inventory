@@ -6,7 +6,9 @@ export function toCsv(
   const cols = columns ?? Object.keys(rows[0]);
   const esc = (v: unknown) => {
     if (v == null) return "";
-    const s = String(v);
+    // Normalize Windows-style \r\n and lone \r to a space so they don't
+    // fragment rows in CSV parsers that treat \r as a line-ending.
+    const s = String(v).trim().replace(/\r\n?/g, " ");
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const head = cols.join(",");
@@ -15,7 +17,7 @@ export function toCsv(
 }
 
 export function downloadCsv(filename: string, csv: string) {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

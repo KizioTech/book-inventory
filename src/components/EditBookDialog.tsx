@@ -46,14 +46,35 @@ export function EditBookDialog({ book, onClose, onSaved }: Props) {
   if (!book) return null;
 
   const save = async () => {
+    const titleVal = form.title?.trim() || "";
+    const authorVal = form.author?.trim() || "";
+
+    if (!titleVal) {
+      toast.error("Title is required.");
+      return;
+    }
+    if (!authorVal) {
+      toast.error("Author is required.");
+      return;
+    }
+    const yearVal = form.year?.trim() || "";
+    if (yearVal) {
+      const y = parseInt(yearVal);
+      const current = new Date().getFullYear();
+      if (isNaN(y) || y < 1450 || y > current) {
+        toast.error(`Year must be between 1450 and ${current}.`);
+        return;
+      }
+    }
+
     setSaving(true);
     const updatedFields = {
       isbn: form.isbn?.trim() || null,
-      title: form.title?.trim() || null,
-      author: form.author?.trim() || null,
+      title: titleVal || null,
+      author: authorVal || null,
       publisher: form.publisher?.trim() || null,
-      year: form.year?.trim() || null,
-      quantity: Number(form.quantity) || 1,
+      year: yearVal || null,
+      quantity: Math.max(1, Number(form.quantity) || 1),
       condition: form.condition,
       category: form.category?.trim() || null,
       shelf_location: form.shelf_location?.trim() || null,

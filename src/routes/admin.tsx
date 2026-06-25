@@ -17,6 +17,11 @@ import {
   UserX,
   User,
   Search,
+  PieChart,
+  CheckCircle2,
+  AlertTriangle,
+  Repeat,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -50,6 +55,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import { downloadCsv, toCsv } from "@/lib/csv";
@@ -73,15 +84,19 @@ import {
 } from "@/lib/queries";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { type BookMeta } from "@/lib/book-metadata";
+import { RecoveryDialog } from "@/components/RecoveryDialog";
+import { EditBookDialog } from "@/components/EditBookDialog";
 import { GlassCard } from "@/components/ui/glass-card";
+import { AnalyticsTab } from "@/components/analytics-tab";
 
 export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-export type AdminTab = "schools" | "users" | "records" | "metadata" | "export" | "account";
+export type AdminTab = "analytics" | "schools" | "users" | "records" | "metadata" | "export" | "account";
 
 const ADMIN_ITEMS = [
+  { id: "analytics", title: "Analytics", icon: PieChart },
   { id: "schools", title: "Schools", icon: SchoolIcon },
   { id: "users", title: "Users", icon: Users },
   { id: "records", title: "Records", icon: BarChart2 },
@@ -167,6 +182,7 @@ function AdminPage() {
       onSignOut={() => signOut()}
     >
       <div className="space-y-6">
+        {tab === "analytics" && <AnalyticsTab />}
         {tab === "schools" && <SchoolsTab />}
         {tab === "users" && <UsersTab />}
         {tab === "records" && <RecordsTab />}
@@ -1098,7 +1114,9 @@ function RecordsTab() {
   const [schoolFilter, setSchoolFilter] = useState<string>("all");
   const [clerkFilter, setClerkFilter] = useState<string>("all");
   const [conditionFilter, setConditionFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "flagged" | "incomplete">("all");
   const [page, setPage] = useState(1);
+  const [editRecord, setEditRecord] = useState<any | null>(null);
 
   const { data: schools = [], isLoading: l1 } = useSchoolsQuery();
   const { data: profiles = [], isLoading: l2 } = useProfilesQuery();
@@ -1122,7 +1140,7 @@ function RecordsTab() {
 
   useEffect(() => {
     setPage(1);
-  }, [schoolFilter, clerkFilter, conditionFilter]);
+  }, [schoolFilter, clerkFilter, conditionFilter, statusFilter]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -1303,6 +1321,16 @@ function RecordsTab() {
                 <SelectItem value="Poor">Poor</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "flagged" | "incomplete")}>
+              <SelectTrigger className="w-36">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All records</SelectItem>
+                <SelectItem value="flagged">Duplicates only</SelectItem>
+                <SelectItem value="incomplete">Incomplete only</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent className="px-0">
@@ -1316,13 +1344,29 @@ function RecordsTab() {
                   <th className="px-4 py-2">School</th>
                   <th className="px-4 py-2">Clerk</th>
                   <th className="px-4 py-2">Cond.</th>
+                  <th className="px-4 py-2">Status</th>
                   <th className="px-4 py-2">Date</th>
                   <th className="px-4 py-2"></th>
                 </tr>
               </thead>
               <tbody>
-                {pageRows.map((b, i) => (
-                  <tr
+                {pageRows
+                  .filter(b => {
+                    const TRACKED = ["title","author","publisher","isbn","year","category","condition"] as const;
+                    const isComplete = TRACKED.every(f => !!b[f as keyof typeof b]);
+                    if (statusFilter === "flagged") return b.flagged_as_duplicate === true;
+                    if (statusFilter === "incomplete") return !isComplete;
+                    return true;
+                  })
+                  .map((b, i) => {
+                  // Completeness check
+                  const TRACKED = ["title","author","publisher","isbn","year","category","condition"] as const;
+                  const missingFields = TRACKED.filter(f => !b[f as keyof typeof b]);
+                  const isComplete = missingFields.length === 0;
+                  const isFlagged = b.flagged_as_duplicate === true;
+
+                  return (
+                   <tr
                     key={b.id}
                     className="border-t border-border hover:bg-secondary/30"
                   >
@@ -1341,10 +1385,55 @@ function RecordsTab() {
                     <td className="px-4 py-2">{schoolName(b.school_id)}</td>
                     <td className="px-4 py-2">{clerkName(b.clerk_id)}</td>
                     <td className="px-4 py-2">{b.condition ?? "—"}</td>
+                    <td className="px-4 py-2">
+                      <TooltipProvider>
+                        <div className="flex items-center gap-1">
+                          {isComplete && !isFlagged ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                              </TooltipTrigger>
+                              <TooltipContent>All fields complete</TooltipContent>
+                            </Tooltip>
+                          ) : null}
+                          {!isComplete && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center gap-0.5 text-amber-600 cursor-default">
+                                  <AlertTriangle className="h-3.5 w-3.5" />
+                                  <span className="text-[10px] font-bold">{missingFields.length}</span>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Missing: {missingFields.map(f => f.charAt(0).toUpperCase() + f.slice(1)).join(', ')}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          {isFlagged && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Repeat className="h-3.5 w-3.5 text-blue-500" />
+                              </TooltipTrigger>
+                              <TooltipContent>Flagged as potential duplicate</TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
+                      </TooltipProvider>
+                    </td>
                     <td className="px-4 py-2 text-xs text-muted-foreground">
                       {new Date(b.created_at).toLocaleString()}
                     </td>
-                    <td className="px-4 py-2 text-right">
+                    <td className="px-4 py-2 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => setEditRecord(b)}
+                        aria-label="Edit"
+                        className="rounded p-1 mr-2 hover:bg-primary/10 disabled:opacity-50"
+                      >
+                        <Pencil
+                          size={15}
+                          className="text-primary/70 hover:text-primary"
+                        />
+                      </button>
                       <button
                         onClick={() => setDeleteTarget(b.id)}
                         disabled={
@@ -1360,11 +1449,12 @@ function RecordsTab() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {pageRows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="px-4 py-6 text-center text-muted-foreground"
                     >
                       No records match these filters.
@@ -1433,6 +1523,19 @@ function RecordsTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {editRecord && (
+        <EditBookDialog
+          book={editRecord}
+          onClose={() => setEditRecord(null)}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: ["books"] });
+            queryClient.invalidateQueries({ queryKey: ["school_stats"] });
+            queryClient.invalidateQueries({ queryKey: ["books_count"] });
+            setEditRecord(null);
+          }}
+        />
+      )}
     </div>
   );
 }

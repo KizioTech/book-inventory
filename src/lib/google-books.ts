@@ -60,8 +60,9 @@ export async function lookupIsbn(isbn: string): Promise<BookMeta | null> {
         )
           .map((p) => (p.name as string) ?? String(p))
           .join(", ");
-        const year: string = details.publish_date
-          ? String(details.publish_date).replace(/\D/g, "").slice(0, 4)
+        const match = String(details.publish_date).match(/\b\d{4}\b/);
+        const year: string = details.publish_date && match
+          ? match[0]
           : "";
         return {
           title: (details.title as string) ?? "",

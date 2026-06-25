@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, LogOut, MapPin, Save, Trash2, Download, Search, Info, ChevronDown, ChevronUp, User, ArrowLeft } from "lucide-react";
+import { BookOpen, LogOut, MapPin, Save, Trash2, Download, Search, Info, ChevronDown, ChevronUp, User, ArrowLeft, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,7 +43,7 @@ export const Route = createFileRoute("/scan")({
 });
 
 import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { useAssignedSchoolsQuery, type School, type BookRow } from "@/lib/queries";
+import { useAssignedSchoolsQuery, type School, type BookRow, checkDuplicateExists } from "@/lib/queries";
 import { GlassCard } from "@/components/ui/glass-card";
 
 const empty = {
@@ -89,6 +89,7 @@ function ScanPage() {
   // Metadata search
   const [titleSuggestions, setTitleSuggestions] = useState<BookMeta[]>([]);
   const titleDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const isbnDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
   const abortRef = useRef<AbortController | null>(null);
 
   // Alert dialogs
@@ -106,10 +107,57 @@ function ScanPage() {
   const [editTarget, setEditTarget] = useState<BookRow | null>(null);
   const [recordsExpanded, setRecordsExpanded] = useState(true);
 
+  // Duplicate warning
+  const [dupWarning, setDupWarning] = useState<BookRow[] | null>(null);
+  const [dupCheckPending, setDupCheckPending] = useState(false);
+  const [saveAnyway, setSaveAnyway] = useState(false);
+  const dupDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Field-level validation errors
+  const [fieldErrors, setFieldErrors] = useState<{ title?: string; author?: string; isbn?: string; year?: string }>({});
+  const [optionalWarned, setOptionalWarned] = useState<Set<string>>(new Set());
+
   // Derived counters from actual records (survives refresh, accounts for quantity)
   const scanCount = records.length;
   const totalBooks = records.reduce((sum, r) => sum + (r.quantity ?? 0), 0);
 
+  // --- Validation helpers ---
+  function validateIsbn(isbn: string): string | null {
+    const clean = isbn.replace(/[\s-]/g, "");
+    if (!clean) return null; // optional
+    if (clean.length === 10) {
+      const sum = clean.split("").reduce((acc, ch, i) =>
+        i < 9 ? acc + parseInt(ch) * (10 - i) : acc + (ch === "X" ? 10 : parseInt(ch)), 0);
+      if (sum % 11 !== 0) return "This doesn't look like a valid ISBN-10.";
+    } else if (clean.length === 13) {
+      const sum = clean.split("").reduce((acc, ch, i) =>
+        acc + parseInt(ch) * (i % 2 === 0 ? 1 : 3), 0);
+      if (sum % 10 !== 0) return "This doesn't look like a valid ISBN-13.";
+    } else {
+      return "ISBN must be 10 or 13 digits.";
+    }
+    return null;
+  }
+
+  function validateYear(year: string): string | null {
+    if (!year.trim()) return null; // optional
+    const y = parseInt(year.trim());
+    const current = new Date().getFullYear();
+    if (isNaN(y) || y < 1450 || y > current) return `Enter a year between 1450 and ${current}.`;
+    return null;
+  }
+
+  // Trigger duplicate check after title+author are both filled
+  const triggerDupCheck = (title: string, author: string) => {
+    if (!title.trim() || !author.trim() || !schoolId) return;
+    clearTimeout(dupDebounce.current);
+    dupDebounce.current = setTimeout(async () => {
+      setDupCheckPending(true);
+      const matches = await checkDuplicateExists(title, author, schoolId);
+      setDupWarning(matches.length > 0 ? matches : null);
+      setDupCheckPending(false);
+    }, 500);
+  };
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
@@ -120,9 +168,10 @@ function ScanPage() {
     [schools, schoolId],
   );
 
+  // BUG 10 FIX: Surface a toast when records fail to load.
   const loadRecords = async (sid: string) => {
     if (!user) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("books")
       .select(
         "id, isbn, title, author, publisher, year, quantity, condition, category, shelf_location, created_at",
@@ -131,6 +180,13 @@ function ScanPage() {
       .eq("clerk_id", user.id)
       .order("created_at", { ascending: false })
       .limit(200);
+    if (error) {
+      toast.error("Failed to load session records — tap to retry.", {
+        action: { label: "Retry", onClick: () => loadRecords(sid) },
+        duration: 10_000,
+      });
+      return;
+    }
     setRecords((data as BookRow[]) ?? []);
   };
 
@@ -184,7 +240,15 @@ function ScanPage() {
       const meta = await lookupIsbn(code);
       
       if (meta && (meta.title || meta.author)) {
-        setForm((f) => ({ ...f, ...meta, isbn: code }));
+        setForm((f) => ({
+          ...f,
+          title: f.title || meta.title,
+          author: f.author || meta.author,
+          publisher: f.publisher || meta.publisher,
+          year: f.year || meta.year,
+          category: f.category || meta.category || "",
+          isbn: code 
+        }));
         setLookupHit(true);
         setStep("review");
         toast.success(meta.title || "Book details loaded", { id: loadingToast });
@@ -196,8 +260,10 @@ function ScanPage() {
       }
     } catch (error) {
       console.error('Lookup error:', error);
-      toast.error("Failed to lookup ISBN", { id: loadingToast });
+      toast.error("Failed to lookup ISBN — fill in manually", { id: loadingToast });
+      // BUG 4 FIX: Always advance to review so the clerk can enter details manually.
       setForm((f) => ({ ...f, isbn: code }));
+      setStep("review");
     } finally {
       setIsLookingUp(false);
     }
@@ -224,7 +290,7 @@ function ScanPage() {
     return () => abortRef.current?.abort();
   }, []);
 
-  const save = async () => {
+  const save = async (opts: { flagged?: boolean } = {}) => {
     if (!user || !schoolId) return;
 
     const trimmedIsbn = form.isbn?.trim();
@@ -234,33 +300,43 @@ function ScanPage() {
     const trimmedYear = form.year?.trim();
     const qty = Number(form.quantity);
 
-    const missing: string[] = [];
-    if (!trimmedTitle) missing.push("Title");
-    if (!trimmedAuthor) missing.push("Author");
-    if (!trimmedPublisher) missing.push("Publisher");
-    if (!trimmedYear) missing.push("Year");
-    if (!qty || qty < 1) missing.push("Quantity");
-
-    if (missing.length > 0) {
-      toast.error(`Please fill in: ${missing.join(", ")}`);
-      return;
+    // Only Title and Author are hard-required
+    const errors: { title?: string; author?: string; year?: string } = {};
+    if (!trimmedTitle) errors.title = "Title is required.";
+    if (!trimmedAuthor) errors.author = "Author is required.";
+    // BUG 7 FIX: Validate year inside save(), not just on blur.
+    if (trimmedYear) {
+      const y = parseInt(trimmedYear);
+      const current = new Date().getFullYear();
+      if (isNaN(y) || y < 1450 || y > current) {
+        errors.year = `Enter a year between 1450 and ${current}.`;
+      }
     }
 
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error("Please fix validation errors before saving.");
+      return;
+    }
+    setFieldErrors({});
+
     const payload: BookFormValues = {
-      id: crypto.randomUUID(), // Client generated ID
-      isbn: trimmedIsbn,
+      id: crypto.randomUUID(),
+      isbn: trimmedIsbn || null,
       title: trimmedTitle,
       author: trimmedAuthor,
-      publisher: trimmedPublisher,
-      year: trimmedYear,
-      quantity: qty,
+      publisher: trimmedPublisher || null,
+      year: trimmedYear || null,
+      quantity: Math.max(1, qty || 1),
       condition: form.condition,
       category: form.category?.trim() || null,
       shelf_location: form.shelf_location?.trim() || null,
       school_id: schoolId,
       clerk_id: user.id,
+      ...(opts.flagged ? { flagged_as_duplicate: true } : {}),
     };
 
+    // BUG 1 FIX: Don't set saving=false here; defer it to the onDone callback.
     setSaving(true);
 
     // Add optimistically to records immediately
@@ -270,28 +346,18 @@ function ScanPage() {
     };
     setRecords(prev => [tempRow, ...prev]);
 
-    saveBookInBackground(payload, (failedValues) => {
-      setRecoveryData(failedValues);
-    }, (deletedId) => {
-      // Undo callback
-      setRecords(prev => prev.filter(r => r.id !== deletedId));
-    });
+    // BUG 1 FIX: setSaving(false) is now called via onDone when the save resolves.
+    saveBookInBackground(
+      payload,
+      (failedValues) => { setRecoveryData(failedValues); },
+      (deletedId) => { setRecords(prev => prev.filter(r => r.id !== deletedId)); },
+      () => { setSaving(false); },
+    );
 
-    // Silently contribute to the shared metadata pool in the background.
-    // This enriches the pool for future projects at any school.
-    if (payload.title) {
+    // BUG 6 FIX: Only contribute to metadata pool when we have a real ISBN.
+    if (payload.title && payload.isbn) {
       (async () => {
         try {
-          // If the book has an ISBN, skip if it's already in the pool
-          if (payload.isbn) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data: existing } = await (supabase as any)
-              .from("book_metadata")
-              .select("id")
-              .eq("isbn", payload.isbn)
-              .maybeSingle();
-            if (existing) return; // Already known — nothing to do
-          }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase as any).from("book_metadata").upsert({
             isbn:      payload.isbn,
@@ -306,20 +372,43 @@ function ScanPage() {
       })();
     }
 
-    setSaving(false);
     setLastScanned(`${payload.title} (×${payload.quantity})`);
+    resetForm();
+  };
 
-    
+  const resetForm = () => {
     setForm({ ...empty });
     setStep("scan");
     setPaused(false);
+    setDupWarning(null);
+    setSaveAnyway(false);
+    setFieldErrors({});
+    setOptionalWarned(new Set());
   };
+
+  /** Increment copy count on an existing record instead of creating a new one */
+  const handleAddToCopyCount = async (existing: BookRow) => {
+    const newQty = (existing.quantity ?? 1) + (Number(form.quantity) || 1);
+    const { error } = await supabase
+      .from("books")
+      .update({ quantity: newQty })
+      .eq("id", existing.id);
+    if (error) {
+      toast.error("Failed to update copy count.");
+      return;
+    }
+    setRecords(prev => prev.map(r => r.id === existing.id ? { ...r, quantity: newQty } : r));
+    toast.success(`Copy count updated — "${existing.title}" now has ${newQty} cop${newQty === 1 ? "y" : "ies"}.`);
+    resetForm();
+  };
+
 
   const updateQtyMutation = useMutation({
     mutationFn: async ({ book, qty }: { book: BookRow, qty: number }) => {
-      if (qty < 0) return;
-      setRecords(prev => prev.map(r => r.id === book.id ? { ...r, quantity: qty } : r));
-      const { error } = await supabase.from("books").update({ quantity: qty }).eq("id", book.id);
+      // BUG 5 FIX: Enforce minimum quantity of 1 at the mutation level.
+      const safeQty = Math.max(1, qty);
+      setRecords(prev => prev.map(r => r.id === book.id ? { ...r, quantity: safeQty } : r));
+      const { error } = await supabase.from("books").update({ quantity: safeQty }).eq("id", book.id);
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["books"] }),
@@ -351,8 +440,22 @@ function ScanPage() {
 
   const exportCsv = () => {
     if (records.length === 0) return toast.error("Nothing to export");
+    // BUG 11 FIX: Prepend audit metadata and include school/clerk in every row.
+    const exportedAt = new Date().toISOString();
+    const schoolName = activeSchool?.name ?? "Unknown School";
+    const clerkName = profile?.full_name ?? user?.email ?? "Unknown Clerk";
+    const auditHeader = [
+      `# School: ${schoolName}`,
+      `# Clerk: ${clerkName}`,
+      `# Exported At: ${exportedAt}`,
+      `# Total Records: ${records.length}`,
+      `# Total Quantity: ${records.reduce((s, r) => s + (r.quantity ?? 0), 0)}`,
+      "",
+    ].join("\n");
     const csv = toCsv(
       records.map((r) => ({
+        school: schoolName,
+        clerk: clerkName,
         isbn: r.isbn,
         title: r.title,
         author: r.author,
@@ -366,8 +469,8 @@ function ScanPage() {
       })),
     );
     downloadCsv(
-      `${activeSchool?.name ?? "books"}-${Date.now()}.csv`.replace(/\s+/g, "_"),
-      csv,
+      `${schoolName}-${exportedAt.split("T")[0]}.csv`.replace(/\s+/g, "_"),
+      auditHeader + csv,
     );
   };
 
@@ -668,15 +771,25 @@ function ScanPage() {
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  ISBN <span className="text-destructive normal-case">*</span>
+                  ISBN <span className="text-muted-foreground/60 font-normal normal-case">(optional)</span>
                 </Label>
                 <Input
                   value={form.isbn}
-                  onChange={(e) => setForm({ ...form, isbn: e.target.value })}
+                  onChange={(e) => { setForm({ ...form, isbn: e.target.value }); setFieldErrors(fe => ({ ...fe, isbn: undefined })); }}
+                  onBlur={(e) => {
+                    const err = validateIsbn(e.target.value);
+                    if (err) setFieldErrors(fe => ({ ...fe, isbn: err }));
+                  }}
                   placeholder="13-digit barcode"
                   inputMode="numeric"
-                  className="h-11 rounded-lg"
+                  className={`h-11 rounded-lg ${fieldErrors.isbn ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                 />
+                {fieldErrors.isbn && (
+                  <div className="flex items-center gap-1.5 text-xs text-destructive">
+                    <span>{fieldErrors.isbn}</span>
+                    <button type="button" className="underline text-muted-foreground" onClick={() => setFieldErrors(fe => ({ ...fe, isbn: undefined }))}>Save anyway</button>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -686,9 +799,13 @@ function ScanPage() {
                 <div className="relative">
                   <Input
                     value={form.title}
-                    onChange={(e) => handleTitleChange(e.target.value)}
-                    onBlur={() => setTimeout(() => setTitleSuggestions([]), 150)}
-                    className="h-11 rounded-lg"
+                    onChange={(e) => { handleTitleChange(e.target.value); setFieldErrors(fe => ({ ...fe, title: undefined })); }}
+                    onBlur={(e) => {
+                      setTimeout(() => setTitleSuggestions([]), 150);
+                      if (!e.target.value.trim()) setFieldErrors(fe => ({ ...fe, title: "Title is required." }));
+                      triggerDupCheck(e.target.value, form.author);
+                    }}
+                    className={`h-11 rounded-lg ${fieldErrors.title ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                   />
                   {titleSuggestions.length > 0 && (
                     <div className="absolute z-10 w-full mt-1 rounded-lg border border-border bg-card shadow-lg overflow-hidden">
@@ -717,43 +834,86 @@ function ScanPage() {
                     </div>
                   )}
                 </div>
+                {fieldErrors.title && <p className="text-xs text-destructive">{fieldErrors.title}</p>}
               </div>
 
               <div className="space-y-1.5">
                 <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                   Author(s) <span className="text-destructive normal-case">*</span>
                 </Label>
-                <Input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} className="h-11 rounded-lg" />
+                <Input
+                  value={form.author}
+                  onChange={(e) => { setForm({ ...form, author: e.target.value }); setFieldErrors(fe => ({ ...fe, author: undefined })); }}
+                  onBlur={(e) => {
+                    if (!e.target.value.trim()) setFieldErrors(fe => ({ ...fe, author: "Author is required." }));
+                    triggerDupCheck(form.title, e.target.value);
+                  }}
+                  className={`h-11 rounded-lg ${fieldErrors.author ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                />
+                {fieldErrors.author && <p className="text-xs text-destructive">{fieldErrors.author}</p>}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Publisher <span className="text-destructive normal-case">*</span>
+                    Publisher <span className="text-muted-foreground/60 font-normal normal-case">(optional)</span>
                   </Label>
-                  <Input value={form.publisher} onChange={(e) => setForm({ ...form, publisher: e.target.value })} className="h-11 rounded-lg" />
+                  <Input
+                    value={form.publisher}
+                    onChange={(e) => setForm({ ...form, publisher: e.target.value })}
+                    onBlur={() => { if (!form.publisher?.trim()) setOptionalWarned(s => new Set(s).add('publisher')); }}
+                    className={`h-11 rounded-lg ${optionalWarned.has('publisher') && !form.publisher?.trim() ? 'border-amber-400/60' : ''}`}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Year <span className="text-destructive normal-case">*</span>
+                    Year <span className="text-muted-foreground/60 font-normal normal-case">(optional)</span>
                   </Label>
-                  <Input value={form.year} onChange={(e) => setForm({ ...form, year: e.target.value })} inputMode="numeric" className="h-11 rounded-lg" />
+                  <Input
+                    value={form.year}
+                    onChange={(e) => { setForm({ ...form, year: e.target.value }); setFieldErrors(fe => ({ ...fe, year: undefined })); }}
+                    onBlur={(e) => {
+                      const err = validateYear(e.target.value);
+                      if (err) setFieldErrors(fe => ({ ...fe, year: err }));
+                      else if (!e.target.value.trim()) setOptionalWarned(s => new Set(s).add('year'));
+                    }}
+                    inputMode="numeric"
+                    className={`h-11 rounded-lg ${fieldErrors.year ? 'border-destructive' : optionalWarned.has('year') && !form.year?.trim() ? 'border-amber-400/60' : ''}`}
+                  />
+                  {fieldErrors.year && <p className="text-xs text-destructive">{fieldErrors.year}</p>}
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Optional field summary */}
+          {(() => {
+            const empties = [
+              !form.publisher?.trim() && 'Publisher',
+              !form.year?.trim() && 'Year',
+            ].filter(Boolean) as string[];
+            return empties.length > 0 ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400 px-1">
+                {empties.length} field{empties.length > 1 ? 's are' : ' is'} empty — record will be saved as incomplete.
+                {' '}Empty: {empties.join(', ')}.
+              </p>
+            ) : null;
+          })()}
+
           {/* Actions */}
           <div className="flex flex-col gap-2.5">
             <Button
               onClick={() => {
-                const missing: string[] = [];
-                if (!form.title?.trim()) missing.push("Title");
-                if (!form.author?.trim()) missing.push("Author");
-                if (!form.publisher?.trim()) missing.push("Publisher");
-                if (!form.year?.trim()) missing.push("Year");
-                if (missing.length > 0) {
-                  toast.error(`Please fill in: ${missing.join(", ")}`);
+                const errors: { title?: string; author?: string } = {};
+                if (!form.title?.trim()) errors.title = "Title is required.";
+                if (!form.author?.trim()) errors.author = "Author is required.";
+                if (Object.keys(errors).length > 0) {
+                  setFieldErrors(errors);
+                  toast.error("Please fill in Title and Author.");
+                  return;
+                }
+                if (fieldErrors.isbn || fieldErrors.year) {
+                  toast.error("Fix validation errors before continuing.");
                   return;
                 }
                 setStep("specifics");
@@ -765,7 +925,7 @@ function ScanPage() {
             <Button
               variant="outline"
               className="w-full h-12 rounded-xl uppercase tracking-wider text-xs font-bold"
-              onClick={() => { setForm({ ...empty }); setStep("scan"); setPaused(false); }}
+              onClick={resetForm}
             >
               Cancel
             </Button>
@@ -910,25 +1070,65 @@ function ScanPage() {
                   value={form.shelf_location}
                   onChange={(e) => setForm({ ...form, shelf_location: e.target.value })}
                   placeholder="e.g., Section B, Row 4"
-                  className="h-11 rounded-lg pl-10"
                 />
               </div>
             </div>
           </div>
 
+          {/* Duplicate warning banner */}
+          {dupWarning && dupWarning.length > 0 && !saveAnyway && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-4 space-y-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">This book may already be in the system.</p>
+                  <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+                    &ldquo;{dupWarning[0].title}&rdquo; by {dupWarning[0].author} appears {dupWarning.length} time{dupWarning.length > 1 ? 's' : ''} at this school.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full text-xs justify-start gap-2 border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-300"
+                  onClick={() => setDetailBook(dupWarning[0])}
+                >
+                  <Info className="h-3.5 w-3.5" /> View existing record
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full text-xs justify-start gap-2 border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-300"
+                  onClick={() => handleAddToCopyCount(dupWarning[0])}
+                >
+                  <Save className="h-3.5 w-3.5" /> Add to copy count instead — set copies to {(dupWarning[0].quantity ?? 1) + (Number(form.quantity) || 1)}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="w-full text-xs justify-start gap-2 text-amber-700 hover:bg-amber-100 dark:text-amber-400"
+                  onClick={() => setSaveAnyway(true)}
+                >
+                  Save as a separate record anyway
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex flex-col gap-2.5">
             <Button
-              onClick={() => save()}
-              disabled={saving}
+              onClick={() => save({ flagged: !!dupWarning && dupWarning.length > 0 && saveAnyway })}
+              disabled={saving || (!!dupWarning && dupWarning.length > 0 && !saveAnyway)}
               className="w-full h-12 rounded-xl uppercase tracking-wider text-xs font-bold shadow-md flex items-center justify-center gap-2"
             >
-              {saving ? "Saving…" : <>Save & Scan Next <Search className="h-4 w-4" /></>}
+              {saving ? "Saving…" : <><Save className="h-4 w-4" /> Save &amp; Scan Next</>}
             </Button>
             <Button
               variant="outline"
               className="w-full h-12 rounded-xl uppercase tracking-wider text-xs font-bold"
-              onClick={() => { setForm({ ...empty }); setStep("scan"); setPaused(false); }}
+              onClick={resetForm}
             >
               Cancel
             </Button>

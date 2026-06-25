@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { BookFormValues, enqueue } from "@/lib/bookQueue";
+import type { Database } from "@/integrations/supabase/types";
+
+type BooksInsert = Database["public"]["Tables"]["books"]["Insert"];
 
 interface Props {
   data: BookFormValues | null;
@@ -19,7 +22,7 @@ export function RecoveryDialog({ data, onResolved }: Props) {
 
   const retry = async () => {
     setRetrying(true);
-    const { error } = await supabase.from("books").insert(data);
+    const { error } = await supabase.from("books").insert(data as unknown as BooksInsert);
     setRetrying(false);
 
     if (error) {
