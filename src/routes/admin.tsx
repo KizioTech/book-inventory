@@ -81,6 +81,7 @@ import {
   type BookRow,
   type ClerkSchoolAssignment,
   type SchoolStatsRow,
+  joinedAuthor,
 } from "@/lib/queries";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { type BookMeta } from "@/lib/book-metadata";
@@ -113,6 +114,10 @@ interface ClerkSchoolAssignmentOld {
 interface ExportBookData {
   title: string | null;
   author: string | null;
+  author_2: string | null;
+  author_3: string | null;
+  author_4: string | null;
+  author_5: string | null;
   isbn: string | null;
   publisher: string | null;
   year: string | null;
@@ -1379,7 +1384,7 @@ function RecordsTab() {
                     <td className="px-4 py-2">
                       <div className="font-medium text-foreground">{b.title ?? "—"}</div>
                       <div className="text-xs text-muted-foreground">
-                        {b.author ?? ""}
+                        {joinedAuthor(b) || ""}
                       </div>
                     </td>
                     <td className="px-4 py-2">{schoolName(b.school_id)}</td>
@@ -1593,7 +1598,7 @@ function ExportTab() {
     const base = supabase
       .from("books")
       .select(
-        "title, author, isbn, publisher, year, category, quantity, condition, shelf_location, notes",
+        "title, author, author_2, author_3, author_4, author_5, isbn, publisher, year, category, quantity, condition, shelf_location, notes",
       )
       .order("created_at", { ascending: false });
 
@@ -1609,27 +1614,35 @@ function ExportTab() {
     const rows = records.map((b) => ({
       book_title: b.title ?? "",
       author: b.author ?? "",
+      author_2: b.author_2 ?? "",
+      author_3: b.author_3 ?? "",
+      author_4: b.author_4 ?? "",
+      author_5: b.author_5 ?? "",
       isbn: b.isbn ?? "",
-      publisher: b.publisher ?? "",
-      year_published: b.year ?? "",
+      publisher_name: b.publisher ?? "",
+      copyright_year: b.year ?? "",
       category_name: b.category ?? "",
       book_copies: b.quantity ?? 0,
       status: b.condition ?? "",
       shelf_location: b.shelf_location ?? "",
-      description: b.notes ?? "",
+      remarks: b.notes ?? "",
     }));
 
     const columns: (keyof (typeof rows)[0])[] = [
       "book_title",
       "author",
+      "author_2",
+      "author_3",
+      "author_4",
+      "author_5",
       "isbn",
-      "publisher",
-      "year_published",
+      "publisher_name",
+      "copyright_year",
       "category_name",
       "book_copies",
       "status",
       "shelf_location",
-      "description",
+      "remarks",
     ];
 
     const filename = `book-inventory-${schoolId === "all" ? "all-schools" : schoolId}-${Date.now()}.csv`;

@@ -42,7 +42,12 @@ export interface BookRow {
   isbn: string | null;
   title: string | null;
   author: string | null;
+  author_2: string | null;
+  author_3: string | null;
+  author_4: string | null;
+  author_5: string | null;
   publisher: string | null;
+  notes?: string | null;
   year: string | null;
   quantity: number;
   condition: string | null;
@@ -55,6 +60,12 @@ export interface BookRow {
 }
 
 // --- Queries ---
+
+export function joinedAuthor(book: Partial<BookRow>): string {
+  return [book.author, book.author_2, book.author_3, book.author_4, book.author_5]
+    .filter(Boolean)
+    .join("; ");
+}
 
 export function useSchoolsQuery() {
   return useQuery({
@@ -187,7 +198,7 @@ export function useBooksQuery(filters: BookFilters, page: number, pageSize: numb
         q = q.eq("condition", filters.condition);
       }
       if (filters.search) {
-        q = q.or(`title.ilike.%${filters.search}%,author.ilike.%${filters.search}%,isbn.ilike.%${filters.search}%`);
+        q = q.or(`title.ilike.%${filters.search}%,author.ilike.%${filters.search}%,author_2.ilike.%${filters.search}%,author_3.ilike.%${filters.search}%,author_4.ilike.%${filters.search}%,author_5.ilike.%${filters.search}%,isbn.ilike.%${filters.search}%`);
       }
 
       const { data, count, error } = await q;
@@ -287,7 +298,7 @@ export async function checkDuplicateExists(
 ): Promise<BookRow[]> {
   const { data, error } = await supabase
     .from("books")
-    .select("id, title, author, quantity, condition, created_at, clerk_id, school_id, isbn, publisher, year, category, shelf_location, flagged_as_duplicate")
+    .select("id, title, author, author_2, author_3, author_4, author_5, quantity, condition, created_at, clerk_id, school_id, isbn, publisher, year, category, shelf_location, notes, flagged_as_duplicate")
     .ilike("title", title.trim())
     .ilike("author", author.trim())
     .eq("school_id", schoolId)

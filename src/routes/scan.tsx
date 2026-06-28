@@ -24,7 +24,7 @@ import { saveBookInBackground, flushQueue, BookFormValues } from "@/lib/bookQueu
 import { RecoveryDialog } from "@/components/RecoveryDialog";
 import { BookDetailSheet, BookDetail } from "@/components/BookDetailSheet";
 import { EditBookDialog } from "@/components/EditBookDialog";
-import { searchMetadataByTitle, type BookMeta } from "@/lib/book-metadata";
+import { searchMetadataByTitle, type BookMeta, splitAuthors } from "@/lib/book-metadata";
 import logoImg from "@/assets/blue-logo.png";
 import {
   AlertDialog,
@@ -43,7 +43,7 @@ export const Route = createFileRoute("/scan")({
 });
 
 import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { useAssignedSchoolsQuery, type School, type BookRow, checkDuplicateExists } from "@/lib/queries";
+import { useAssignedSchoolsQuery, type School, type BookRow, checkDuplicateExists, joinedAuthor } from "@/lib/queries";
 import { GlassCard } from "@/components/ui/glass-card";
 
 const empty = {
@@ -320,11 +320,17 @@ function ScanPage() {
     }
     setFieldErrors({});
 
+    const authorsArray = splitAuthors(trimmedAuthor || "");
+
     const payload: BookFormValues = {
       id: crypto.randomUUID(),
       isbn: trimmedIsbn || null,
       title: trimmedTitle,
-      author: trimmedAuthor,
+      author: authorsArray[0] || "",
+      author_2: authorsArray[1] || null,
+      author_3: authorsArray[2] || null,
+      author_4: authorsArray[3] || null,
+      author_5: authorsArray[4] || null,
       publisher: trimmedPublisher || null,
       year: trimmedYear || null,
       quantity: Math.max(1, qty || 1),
@@ -363,6 +369,10 @@ function ScanPage() {
             isbn:      payload.isbn,
             title:     payload.title || "",
             author:    payload.author,
+            author_2:  payload.author_2,
+            author_3:  payload.author_3,
+            author_4:  payload.author_4,
+            author_5:  payload.author_5,
             publisher: payload.publisher,
             year:      payload.year,
           }, { onConflict: "isbn", ignoreDuplicates: true });
@@ -452,22 +462,41 @@ function ScanPage() {
       `# Total Quantity: ${records.reduce((s, r) => s + (r.quantity ?? 0), 0)}`,
       "",
     ].join("\n");
-    const csv = toCsv(
-      records.map((r) => ({
-        school: schoolName,
-        clerk: clerkName,
-        isbn: r.isbn,
-        title: r.title,
-        author: r.author,
-        publisher: r.publisher,
-        year: r.year,
-        quantity: r.quantity,
-        condition: r.condition,
-        category: r.category,
-        shelf_location: r.shelf_location,
-        recorded_at: r.created_at,
-      })),
-    );
+    const rows = records.map((r) => ({
+      book_title: r.title ?? "",
+      author: r.author ?? "",
+      author_2: r.author_2 ?? "",
+      author_3: r.author_3 ?? "",
+      author_4: r.author_4 ?? "",
+      author_5: r.author_5 ?? "",
+      isbn: r.isbn ?? "",
+      publisher_name: r.publisher ?? "",
+      copyright_year: r.year ?? "",
+      category_name: r.category ?? "",
+      book_copies: r.quantity ?? 0,
+      status: r.condition ?? "",
+      shelf_location: r.shelf_location ?? "",
+      remarks: (r as any).notes ?? "",
+    }));
+
+    const columns: (keyof (typeof rows)[0])[] = [
+      "book_title",
+      "author",
+      "author_2",
+      "author_3",
+      "author_4",
+      "author_5",
+      "isbn",
+      "publisher_name",
+      "copyright_year",
+      "category_name",
+      "book_copies",
+      "status",
+      "shelf_location",
+      "remarks",
+    ];
+
+    const csv = toCsv(rows, columns);
     downloadCsv(
       `${schoolName}-${exportedAt.split("T")[0]}.csv`.replace(/\s+/g, "_"),
       auditHeader + csv,
@@ -1083,7 +1112,7 @@ function ScanPage() {
                 <div>
                   <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">This book may already be in the system.</p>
                   <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
-                    &ldquo;{dupWarning[0].title}&rdquo; by {dupWarning[0].author} appears {dupWarning.length} time{dupWarning.length > 1 ? 's' : ''} at this school.
+                    &ldquo;{dupWarning[0].title}&rdquo; by {joinedAuthor(dupWarning[0])} appears {dupWarning.length} time{dupWarning.length > 1 ? 's' : ''} at this school.
                   </p>
                 </div>
               </div>
@@ -1171,7 +1200,7 @@ function ScanPage() {
             const q = recordSearch.trim().toLowerCase();
             const filtered = q
               ? records.filter((r) =>
-                  [r.title, r.author, r.isbn]
+                  [r.title, joinedAuthor(r), r.isbn]
                     .some((v) => v?.toLowerCase().includes(q)),
                 )
               : records;
@@ -1211,7 +1240,7 @@ function ScanPage() {
                       <td className="px-3 py-2">
                         <div className="font-medium text-primary">{r.title ?? "—"}</div>
                         <div className="text-xs text-muted-foreground">
-                          {r.author ?? ""}
+                          {joinedAuthor(r) || ""}
                         </div>
                       </td>
                       <td className="px-3 py-2 font-mono text-xs">

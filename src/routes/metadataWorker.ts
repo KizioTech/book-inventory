@@ -18,10 +18,16 @@ self.onmessage = async (e: MessageEvent<{ file: File; batchSize: number }>) => {
         const idx = (name: string) => headers.indexOf(name);
         const rawIsbn = cols[idx("isbn")]?.trim()?.replace(/[^0-9Xx]/g, "");
         const isbn = rawIsbn ? rawIsbn : null;
+        const rawAuthor = cols[idx("author")] || "";
+        const authors = rawAuthor.split(";").map(a => a.trim()).filter(Boolean);
         return {
           isbn,
           title:     cols[idx("book_title")]     || "",
-          author:    cols[idx("author")]         || null,
+          author:    authors[0] || null,
+          author_2:  authors[1] || null,
+          author_3:  authors[2] || null,
+          author_4:  authors[3] || null,
+          author_5:  authors[4] || null,
           publisher: cols[idx("publisher")]      || null,
           year:      cols[idx("year_published")] || null,
           category:  cols[idx("category_name")] || null,

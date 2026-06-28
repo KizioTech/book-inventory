@@ -9,7 +9,10 @@ export interface BookFormValues {
   isbn: string | null;
   title: string | null;
   author: string | null;
-  publisher: string | null;
+  author_2: string | null;
+  author_3: string | null;
+  author_4: string | null;
+  author_5: string | null;
   year: string | null;
   quantity: number;
   condition: string | null;

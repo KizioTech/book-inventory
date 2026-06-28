@@ -4,7 +4,7 @@ import { ArrowLeft, Search, Trash2, Download } from "lucide-react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useBooksQuery, type BookRow } from "@/lib/queries";
+import { useBooksQuery, type BookRow, joinedAuthor } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GlassCard } from "@/components/ui/glass-card";
@@ -89,20 +89,41 @@ function ExploreSchoolPage() {
 
   const exportCsv = () => {
     if (!booksData?.data || booksData.data.length === 0) return toast.error("Nothing to export");
-    const csv = toCsv(
-      booksData.data.map((r) => ({
-        isbn: r.isbn,
-        title: r.title,
-        author: r.author,
-        publisher: r.publisher,
-        year: r.year,
-        quantity: r.quantity,
-        condition: r.condition,
-        category: r.category,
-        shelf_location: r.shelf_location,
-        recorded_at: r.created_at,
-      })),
-    );
+    const rows = booksData.data.map((r) => ({
+      book_title: r.title ?? "",
+      author: r.author ?? "",
+      author_2: r.author_2 ?? "",
+      author_3: r.author_3 ?? "",
+      author_4: r.author_4 ?? "",
+      author_5: r.author_5 ?? "",
+      isbn: r.isbn ?? "",
+      publisher_name: r.publisher ?? "",
+      copyright_year: r.year ?? "",
+      category_name: r.category ?? "",
+      book_copies: r.quantity ?? 0,
+      status: r.condition ?? "",
+      shelf_location: r.shelf_location ?? "",
+      remarks: (r as any).notes ?? "",
+    }));
+
+    const columns: (keyof (typeof rows)[0])[] = [
+      "book_title",
+      "author",
+      "author_2",
+      "author_3",
+      "author_4",
+      "author_5",
+      "isbn",
+      "publisher_name",
+      "copyright_year",
+      "category_name",
+      "book_copies",
+      "status",
+      "shelf_location",
+      "remarks",
+    ];
+
+    const csv = toCsv(rows, columns);
     downloadCsv(
       `school-${schoolId}-export-${Date.now()}.csv`.replace(/\s+/g, "_"),
       csv,
@@ -178,7 +199,7 @@ function ExploreSchoolPage() {
                             {b.title || "—"}
                           </div>
                           <div className="text-xs text-muted-foreground truncate max-w-[200px] md:max-w-[300px]">
-                            {b.author || "—"}
+                            {joinedAuthor(b) || "—"}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground font-mono text-xs">

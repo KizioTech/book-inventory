@@ -20,7 +20,8 @@ import {
   useBooksQuery,
   useAssignedSchoolsQuery,
   useBooksCountQuery,
-  type BookRow
+  type BookRow,
+  joinedAuthor
 } from "@/lib/queries";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import {
@@ -198,7 +199,7 @@ function ClerkDashboardTab({ userId, role }: { userId: string; role: string }) {
                   <li key={b.id} className="flex flex-col p-3 border border-border rounded-lg bg-card">
                     <span className="font-semibold text-sm truncate">{b.title || "Untitled"}</span>
                     <div className="flex justify-between items-center mt-1">
-                      <span className="text-xs text-muted-foreground">{b.author || "Unknown Author"}</span>
+                      <span className="text-xs text-muted-foreground">{joinedAuthor(b) || "Unknown Author"}</span>
                       <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                         Qty: {b.quantity}
                       </span>
@@ -281,7 +282,7 @@ function ClerkRecordsTab({ userId }: { userId: string }) {
                         {b.title || "—"}
                       </div>
                       <div className="text-xs text-muted-foreground truncate max-w-[200px]">
-                        {b.author || "—"}
+                        {joinedAuthor(b) || "—"}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground font-mono text-xs">

@@ -1,11 +1,16 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { joinedAuthor } from "@/lib/queries";
 
 export interface BookDetail {
   id: string;
   isbn: string | null;
   title: string | null;
   author: string | null;
+  author_2?: string | null;
+  author_3?: string | null;
+  author_4?: string | null;
+  author_5?: string | null;
   publisher: string | null;
   year: string | null;
   quantity: number;
@@ -33,7 +38,7 @@ export function BookDetailSheet({ book, onClose, onEdit }: Props) {
         </SheetHeader>
         <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
           <Detail label="ISBN"        value={book.isbn} />
-          <Detail label="Author"      value={book.author} />
+          <Detail label="Author"      value={joinedAuthor(book)} />
           <Detail label="Publisher"   value={book.publisher} />
           <Detail label="Year"        value={book.year} />
           <Detail label="Quantity"    value={book.quantity} />

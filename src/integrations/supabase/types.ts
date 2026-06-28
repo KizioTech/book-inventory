@@ -43,6 +43,10 @@ export type Database = {
       book_metadata: {
         Row: {
           author: string | null
+          author_2: string | null
+          author_3: string | null
+          author_4: string | null
+          author_5: string | null
           category: string | null
           created_at: string
           id: string
@@ -53,6 +57,10 @@ export type Database = {
         }
         Insert: {
           author?: string | null
+          author_2?: string | null
+          author_3?: string | null
+          author_4?: string | null
+          author_5?: string | null
           category?: string | null
           created_at?: string
           id?: string
@@ -63,6 +71,10 @@ export type Database = {
         }
         Update: {
           author?: string | null
+          author_2?: string | null
+          author_3?: string | null
+          author_4?: string | null
+          author_5?: string | null
           category?: string | null
           created_at?: string
           id?: string
@@ -76,6 +88,10 @@ export type Database = {
       books: {
         Row: {
           author: string | null
+          author_2: string | null
+          author_3: string | null
+          author_4: string | null
+          author_5: string | null
           category: string | null
           clerk_id: string
           condition: string | null
@@ -93,6 +109,10 @@ export type Database = {
         }
         Insert: {
           author?: string | null
+          author_2?: string | null
+          author_3?: string | null
+          author_4?: string | null
+          author_5?: string | null
           category?: string | null
           clerk_id: string
           condition?: string | null
@@ -110,6 +130,10 @@ export type Database = {
         }
         Update: {
           author?: string | null
+          author_2?: string | null
+          author_3?: string | null
+          author_4?: string | null
+          author_5?: string | null
           category?: string | null
           clerk_id?: string
           condition?: string | null

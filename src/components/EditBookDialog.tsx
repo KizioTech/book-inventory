@@ -15,6 +15,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { BookDetail } from "./BookDetailSheet";
+import { joinedAuthor } from "@/lib/queries";
+import { splitAuthors } from "@/lib/book-metadata";
 
 const BOOK_CATEGORIES = [
   "Arts",
@@ -39,7 +41,7 @@ export function EditBookDialog({ book, onClose, onSaved }: Props) {
 
   useEffect(() => {
     if (book) {
-      setForm({ ...book });
+      setForm({ ...book, author: joinedAuthor(book) });
     }
   }, [book]);
 
@@ -68,10 +70,15 @@ export function EditBookDialog({ book, onClose, onSaved }: Props) {
     }
 
     setSaving(true);
+    const authorsArray = splitAuthors(authorVal);
     const updatedFields = {
       isbn: form.isbn?.trim() || null,
       title: titleVal || null,
-      author: authorVal || null,
+      author: authorsArray[0] || "",
+      author_2: authorsArray[1] || null,
+      author_3: authorsArray[2] || null,
+      author_4: authorsArray[3] || null,
+      author_5: authorsArray[4] || null,
       publisher: form.publisher?.trim() || null,
       year: yearVal || null,
       quantity: Math.max(1, Number(form.quantity) || 1),

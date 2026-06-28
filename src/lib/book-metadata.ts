@@ -39,6 +39,16 @@ const db = supabase as any;
  * Look up a book by ISBN in the local Supabase metadata pool.
  * Returns null when not found.
  */
+
+export function splitAuthors(authorString: string | null): string[] {
+  if (!authorString) return [];
+  return authorString
+    .split(";")
+    .map((a) => a.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
 export async function lookupMetadataByIsbn(
   isbn: string
 ): Promise<BookMeta | null> {
