@@ -8,8 +8,18 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
+/**
+ * Defines the possible roles a user can hold within the application.
+ * - `super_admin`: Full access to all schools and system settings.
+ * - `admin`: Administrative access for specific assigned schools.
+ * - `clerk`: Basic access to scan and manage inventory for assigned schools.
+ */
 export type AppRole = "super_admin" | "admin" | "clerk";
 
+/**
+ * Represents the public profile of an authenticated user, typically
+ * synced with the `profiles` table in Supabase.
+ */
 interface Profile {
   id: string;
   full_name: string | null;
@@ -18,6 +28,10 @@ interface Profile {
   avatar_url: string | null;
 }
 
+/**
+ * The Authentication Context shape, providing state and methods
+ * for managing user sessions and profiles.
+ */
 interface AuthCtx {
   user: User | null;
   session: Session | null;
@@ -31,6 +45,11 @@ interface AuthCtx {
 
 const Ctx = createContext<AuthCtx | null>(null);
 
+/**
+ * The Provider component that wraps the application (or parts of it)
+ * to supply the AuthContext. It listens to Supabase Auth state changes
+ * and automatically loads the user's profile and highest role.
+ */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -119,6 +138,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Custom hook to access the current authentication context.
+ * Must be used within a component wrapped by `<AuthProvider>`.
+ * 
+ * @throws {Error} If called outside of an `<AuthProvider>`.
+ */
 export function useAuth() {
   const v = useContext(Ctx);
   if (!v) throw new Error("useAuth outside provider");

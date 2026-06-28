@@ -1,3 +1,6 @@
+/**
+ * Allowed status values for a book or inventory item.
+ */
 export type StatusValue = "active" | "slow" | "idle" | "paused";
 
 const STATUS_CONFIG: Record<StatusValue, { dot: string; label: string }> = {
@@ -7,6 +10,12 @@ const STATUS_CONFIG: Record<StatusValue, { dot: string; label: string }> = {
   paused: { dot: "bg-muted-foreground/50", label: "Paused" },
 };
 
+/**
+ * A UI component that displays a status badge with a colored dot
+ * indicating the current state (e.g. Active, Slow, Not started).
+ *
+ * @param props.status - The current StatusValue to render.
+ */
 export function StatusBadge({ status }: { status: StatusValue }) {
   const { dot, label } = STATUS_CONFIG[status];
   return (

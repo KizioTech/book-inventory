@@ -10,6 +10,10 @@ import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/integrations/supabase/client";
 import logoImg from "@/assets/blue-logo.png";
 
+/**
+ * Defines the `/auth` route for TanStack router.
+ * Includes page title and meta description.
+ */
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
@@ -23,6 +27,11 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+/**
+ * The main authentication page component.
+ * Handles user login (email/password) and password reset flows.
+ * Automatically redirects authenticated users to the home page (`/`).
+ */
 function AuthPage() {
   const { user, loading, signIn } = useAuth();
   const navigate = useNavigate();
