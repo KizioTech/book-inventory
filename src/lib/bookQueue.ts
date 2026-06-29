@@ -13,6 +13,7 @@ export interface BookFormValues {
   author_3: string | null;
   author_4: string | null;
   author_5: string | null;
+  publisher: string | null;
   year: string | null;
   quantity: number;
   condition: string | null;

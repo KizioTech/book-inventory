@@ -267,42 +267,61 @@ export function useAllBooksQuery() {
   });
 }
 
-/** Fetches all records that match a specific duplicate group (title + author + school). */
+/** Fetches all records that match a specific duplicate group (isbn + school). */
 export function useDuplicateGroupQuery(
-  params: { title: string; author: string; schoolId: string } | null
+  params: { isbn: string; schoolId: string } | null
 ) {
   return useQuery({
     queryKey: ["duplicate_group", params],
     queryFn: async () => {
-      if (!params) return [];
+      if (!params || !params.isbn) return [];
       const { data, error } = await supabase
         .from("books")
         .select("*")
-        .ilike("title", params.title)
-        .ilike("author", params.author)
+        .eq("isbn", params.isbn)
         .eq("school_id", params.schoolId)
         .order("created_at", { ascending: true });
       if (error) throw error;
       return (data as BookRow[]) ?? [];
     },
-    enabled: !!params,
+    enabled: !!params?.isbn,
     staleTime: 0, // always fresh when resolving
   });
 }
 
-/** Checks if a book (title + author + school) already exists — used for scan-time duplicate detection. */
+/** Checks if a book (isbn + school) already exists — used for scan-time duplicate detection. */
 export async function checkDuplicateExists(
-  title: string,
-  author: string,
+  isbn: string,
   schoolId: string
 ): Promise<BookRow[]> {
+  if (!isbn || !isbn.trim()) return [];
   const { data, error } = await supabase
     .from("books")
     .select("id, title, author, author_2, author_3, author_4, author_5, quantity, condition, created_at, clerk_id, school_id, isbn, publisher, year, category, shelf_location, notes, flagged_as_duplicate")
-    .ilike("title", title.trim())
-    .ilike("author", author.trim())
+    .eq("isbn", isbn.trim())
     .eq("school_id", schoolId)
     .limit(5);
   if (error) return [];
   return (data as unknown as BookRow[]) ?? [];
+}
+
+export interface DuplicateGroupRpcResponse {
+  isbn: string;
+  title: string;
+  author: string;
+  school_id: string;
+  duplicate_count: number;
+}
+
+export function useDuplicateGroupsRpc(schoolId?: string | null) {
+  return useQuery({
+    queryKey: ["duplicate_groups_rpc", schoolId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_duplicate_groups" as any, {
+        p_school_id: schoolId || null
+      });
+      if (error) throw error;
+      return (data as unknown as DuplicateGroupRpcResponse[]) ?? [];
+    },
+  });
 }

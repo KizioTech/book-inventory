@@ -147,13 +147,13 @@ function ScanPage() {
     return null;
   }
 
-  // Trigger duplicate check after title+author are both filled
-  const triggerDupCheck = (title: string, author: string) => {
-    if (!title.trim() || !author.trim() || !schoolId) return;
+  // Trigger duplicate check when ISBN is filled
+  const triggerDupCheck = (isbn: string) => {
+    if (!isbn.trim() || !schoolId) return;
     clearTimeout(dupDebounce.current);
     dupDebounce.current = setTimeout(async () => {
       setDupCheckPending(true);
-      const matches = await checkDuplicateExists(title, author, schoolId);
+      const matches = await checkDuplicateExists(isbn, schoolId);
       setDupWarning(matches.length > 0 ? matches : null);
       setDupCheckPending(false);
     }, 500);
@@ -283,7 +283,7 @@ function ScanPage() {
       } catch (err) {
         if (err instanceof Error && err.name !== 'AbortError') throw err;
       }
-    }, 150);
+    }, 350);
   };
 
   useEffect(() => {
@@ -804,7 +804,10 @@ function ScanPage() {
                 </Label>
                 <Input
                   value={form.isbn}
-                  onChange={(e) => { setForm({ ...form, isbn: e.target.value }); setFieldErrors(fe => ({ ...fe, isbn: undefined })); }}
+                  onChange={(e) => { 
+                    setForm({ ...form, isbn: e.target.value }); 
+                    setFieldErrors(fe => ({ ...fe, isbn: undefined })); 
+                  }}
                   onBlur={(e) => {
                     const err = validateIsbn(e.target.value);
                     if (err) setFieldErrors(fe => ({ ...fe, isbn: err }));
@@ -832,7 +835,6 @@ function ScanPage() {
                     onBlur={(e) => {
                       setTimeout(() => setTitleSuggestions([]), 150);
                       if (!e.target.value.trim()) setFieldErrors(fe => ({ ...fe, title: "Title is required." }));
-                      triggerDupCheck(e.target.value, form.author);
                     }}
                     className={`h-11 rounded-lg ${fieldErrors.title ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                   />
@@ -875,7 +877,6 @@ function ScanPage() {
                   onChange={(e) => { setForm({ ...form, author: e.target.value }); setFieldErrors(fe => ({ ...fe, author: undefined })); }}
                   onBlur={(e) => {
                     if (!e.target.value.trim()) setFieldErrors(fe => ({ ...fe, author: "Author is required." }));
-                    triggerDupCheck(form.title, e.target.value);
                   }}
                   className={`h-11 rounded-lg ${fieldErrors.author ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                 />

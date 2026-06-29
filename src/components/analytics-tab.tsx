@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, AreaChart, Area } from "recharts";
 import { Loader2, Download, AlertTriangle, FileText, CheckCircle2, TrendingUp, BookOpen, GitMerge, Layers } from "lucide-react";
-import { ResolveDuplicateDialog } from "@/components/ResolveDuplicateDialog";
+import { Link } from "@tanstack/react-router";
 
 const REQUIRED_FIELDS = [
   { key: "title", label: "Title" },
@@ -25,17 +25,20 @@ export function AnalyticsTab() {
 
   const [filterSchool, setFilterSchool] = useState<string>("all");
   const [filterClerk, setFilterClerk] = useState<string>("all");
-  const [resolveGroup, setResolveGroup] = useState<{
-    title: string; author: string; school: string; schoolId: string; count: number;
-  } | null>(null);
+  const [filterDate, setFilterDate] = useState<string>("all");
 
   const filteredBooks = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
     return books.filter((b) => {
       if (filterSchool !== "all" && b.school_id !== filterSchool) return false;
       if (filterClerk !== "all" && b.clerk_id !== filterClerk) return false;
+      if (filterDate === "today") {
+        const bookDate = new Date(b.created_at).toISOString().split('T')[0];
+        if (bookDate !== today) return false;
+      }
       return true;
     });
-  }, [books, filterSchool, filterClerk]);
+  }, [books, filterSchool, filterClerk, filterDate]);
 
   const { metrics, missingFieldCounts, clerkBreakdown, schoolBreakdown, duplicates, velocityData } = useMemo(() => {
     let completeCount = 0;
@@ -89,10 +92,9 @@ export function AnalyticsTab() {
       entryDates[dateKey] = (entryDates[dateKey] || 0) + 1;
 
       // Duplicates
-      const titleClean = (b.title || "").trim().toLowerCase();
-      const authClean = (b.author || "").trim().toLowerCase();
-      if (titleClean && authClean) {
-        const sig = `${titleClean}|${authClean}|${b.school_id}`;
+      const isbnClean = (b.isbn || "").trim().toLowerCase();
+      if (isbnClean) {
+        const sig = `${isbnClean}|${b.school_id}`;
         sigMap[sig] = (sigMap[sig] || 0) + 1;
       }
     });
@@ -124,9 +126,12 @@ export function AnalyticsTab() {
     const dups = Object.entries(sigMap)
       .filter(([_, count]) => count > 1)
       .map(([sig, count]) => {
-        const [title, author, sid] = sig.split("|");
+        const [isbn, sid] = sig.split("|");
+        const firstBook = filteredBooks.find(b => (b.isbn || "").trim().toLowerCase() === isbn && b.school_id === sid);
+        const title = firstBook?.title || "Unknown";
+        const author = firstBook?.author || "Unknown";
         const sName = schools.find(s => s.id === sid)?.name || sid;
-        return { title, author, school: sName, schoolId: sid, count };
+        return { isbn, title, author, school: sName, schoolId: sid, count };
       })
       .sort((a, b) => b.count - a.count);
 
@@ -189,11 +194,11 @@ export function AnalyticsTab() {
     md += `\n`;
 
     if (duplicates.length > 0) {
-      md += `## Potential Duplicates Flagged\n`;
-      md += `| Title | Author | School | Count |\n`;
-      md += `|---|---|---|---|\n`;
+      md += `## Potential Duplicates Flagged (Same ISBN)\n`;
+      md += `| ISBN | Title | Author | School | Count |\n`;
+      md += `|---|---|---|---|---|\n`;
       duplicates.forEach(d => {
-        md += `| ${d.title} | ${d.author} | ${d.school} | ${d.count} |\n`;
+        md += `| ${d.isbn} | ${d.title} | ${d.author} | ${d.school} | ${d.count} |\n`;
       });
       md += `\n`;
     }
@@ -247,7 +252,16 @@ export function AnalyticsTab() {
           <h2 className="text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-linear-to-r from-primary to-primary/60">Analytics Dashboard</h2>
           <p className="text-sm text-muted-foreground mt-1">Real-time metrics on cataloguing completeness and velocity.</p>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
+          <Select value={filterDate} onValueChange={setFilterDate}>
+            <SelectTrigger className="w-[120px] bg-card/50 backdrop-blur-sm border-border">
+              <SelectValue placeholder="All Time" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Time</SelectItem>
+              <SelectItem value="today">Today</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={filterSchool} onValueChange={setFilterSchool}>
             <SelectTrigger className="w-[160px] bg-card/50 backdrop-blur-sm border-border">
               <SelectValue placeholder="All Schools" />
@@ -266,7 +280,7 @@ export function AnalyticsTab() {
               {clerks.filter(c => c.active).map(c => <SelectItem key={c.id} value={c.id}>{c.full_name || c.email}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button onClick={handleExportMarkdown} variant="default" className="gap-2 shadow-md hover:shadow-lg transition-all active:scale-95">
+          <Button onClick={handleExportMarkdown} variant="default" className="w-full sm:w-auto gap-2 shadow-md hover:shadow-lg transition-all active:scale-95">
             <Download size={16} /> Export Markdown
           </Button>
         </div>
@@ -474,13 +488,14 @@ export function AnalyticsTab() {
               <AlertTriangle size={18} /> Potential Duplicates Flagged
             </CardTitle>
             <CardDescription className="text-amber-700/70 dark:text-amber-500/70">
-              These books appear multiple times with the exact same Title, Author, and School.
+              These books appear multiple times with the exact same ISBN and School.
             </CardDescription>
           </CardHeader>
           <div className="overflow-x-auto p-0">
             <table className="w-full text-sm text-left">
               <thead className="bg-amber-500/5">
                 <tr className="border-b border-amber-200/30 text-amber-800/70 dark:text-amber-500/70">
+                  <th className="py-3 px-4 font-medium">ISBN</th>
                   <th className="py-3 px-4 font-medium">Title</th>
                   <th className="py-3 px-4 font-medium">Author</th>
                   <th className="py-3 px-4 font-medium">School</th>
@@ -491,25 +506,24 @@ export function AnalyticsTab() {
               <tbody>
                 {duplicates.slice(0, 10).map((d, i) => (
                   <tr key={i} className="border-b border-amber-200/20 last:border-0 text-amber-900 dark:text-amber-100 hover:bg-amber-500/5 transition-colors">
+                    <td className="py-3 px-4 font-mono">{d.isbn}</td>
                     <td className="py-3 px-4 capitalize font-medium">{d.title}</td>
                     <td className="py-3 px-4 capitalize">{d.author}</td>
                     <td className="py-3 px-4">{d.school}</td>
                     <td className="py-3 px-4 text-right font-bold">{d.count}×</td>
                     <td className="py-3 px-4 text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs gap-1.5 border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-300"
-                        onClick={() => setResolveGroup({ title: d.title, author: d.author, school: d.school, schoolId: d.schoolId, count: d.count })}
+                      <Link
+                        to="/resolve-duplicates"
+                        className="inline-flex h-7 items-center justify-center rounded-md border border-amber-300 px-3 text-xs gap-1.5 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-300"
                       >
-                        <GitMerge className="h-3 w-3" /> Resolve
-                      </Button>
+                        <GitMerge className="h-3 w-3" /> Review
+                      </Link>
                     </td>
                   </tr>
                 ))}
                 {duplicates.length > 10 && (
                   <tr>
-                    <td colSpan={4} className="py-4 text-center text-amber-700/80 dark:text-amber-500/80 text-xs font-medium bg-amber-500/5">
+                    <td colSpan={6} className="py-4 text-center text-amber-700/80 dark:text-amber-500/80 text-xs font-medium bg-amber-500/5">
                       + {duplicates.length - 10} more duplicates hidden
                     </td>
                   </tr>
@@ -543,17 +557,11 @@ export function AnalyticsTab() {
             ))}
 
             {duplicates.length > 0 && (
-              <li className="flex gap-3 text-sm"><div className="mt-0.5 rounded-full bg-amber-500/20 p-1 text-amber-600"><GitMerge className="h-3 w-3" /></div> <span>There are <strong className="mx-1">{duplicates.length}</strong> duplicate groups flagged. Use the <strong>Resolve</strong> buttons in the Duplicates section to merge or dismiss them.</span></li>
+              <li className="flex gap-3 text-sm"><div className="mt-0.5 rounded-full bg-amber-500/20 p-1 text-amber-600"><GitMerge className="h-3 w-3" /></div> <span>There are <strong className="mx-1">{duplicates.length}</strong> duplicate groups flagged. Navigate to the <strong>Resolve Duplicates</strong> page to merge or dismiss them.</span></li>
             )}
           </ul>
         </CardContent>
       </GlassCard>
-
-      <ResolveDuplicateDialog
-        group={resolveGroup}
-        open={!!resolveGroup}
-        onClose={() => setResolveGroup(null)}
-      />
     </div>
   );
 }

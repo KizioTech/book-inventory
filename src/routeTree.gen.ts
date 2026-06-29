@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ScanRouteImport } from './routes/scan'
+import { Route as ResolveDuplicatesRouteImport } from './routes/resolve-duplicates'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ClerkRouteImport } from './routes/clerk'
 import { Route as AuthRouteImport } from './routes/auth'
@@ -20,6 +21,11 @@ import { Route as ExploreSchoolIdRouteImport } from './routes/explore.$schoolId'
 const ScanRoute = ScanRouteImport.update({
   id: '/scan',
   path: '/scan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResolveDuplicatesRoute = ResolveDuplicatesRouteImport.update({
+  id: '/resolve-duplicates',
+  path: '/resolve-duplicates',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/clerk': typeof ClerkRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/resolve-duplicates': typeof ResolveDuplicatesRoute
   '/scan': typeof ScanRoute
   '/explore/$schoolId': typeof ExploreSchoolIdRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/clerk': typeof ClerkRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/resolve-duplicates': typeof ResolveDuplicatesRoute
   '/scan': typeof ScanRoute
   '/explore/$schoolId': typeof ExploreSchoolIdRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/clerk': typeof ClerkRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/resolve-duplicates': typeof ResolveDuplicatesRoute
   '/scan': typeof ScanRoute
   '/explore/$schoolId': typeof ExploreSchoolIdRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/clerk'
     | '/reset-password'
+    | '/resolve-duplicates'
     | '/scan'
     | '/explore/$schoolId'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/clerk'
     | '/reset-password'
+    | '/resolve-duplicates'
     | '/scan'
     | '/explore/$schoolId'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/clerk'
     | '/reset-password'
+    | '/resolve-duplicates'
     | '/scan'
     | '/explore/$schoolId'
   fileRoutesById: FileRoutesById
@@ -117,6 +129,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ClerkRoute: typeof ClerkRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ResolveDuplicatesRoute: typeof ResolveDuplicatesRoute
   ScanRoute: typeof ScanRoute
   ExploreSchoolIdRoute: typeof ExploreSchoolIdRoute
 }
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/scan'
       fullPath: '/scan'
       preLoaderRoute: typeof ScanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/resolve-duplicates': {
+      id: '/resolve-duplicates'
+      path: '/resolve-duplicates'
+      fullPath: '/resolve-duplicates'
+      preLoaderRoute: typeof ResolveDuplicatesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -181,6 +201,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ClerkRoute: ClerkRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ResolveDuplicatesRoute: ResolveDuplicatesRoute,
   ScanRoute: ScanRoute,
   ExploreSchoolIdRoute: ExploreSchoolIdRoute,
 }
