@@ -83,6 +83,9 @@ function ScanPage() {
   const [paused, setPaused] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
+  const [lookupStatus, setLookupStatus] = useState<
+    "idle" | "checking-local" | "searching-online" | "done"
+  >("idle");
   const [step, setStep] = useState<"scan" | "review" | "specifics">("scan");
   const [lookupHit, setLookupHit] = useState<boolean>(false);
 
@@ -114,7 +117,7 @@ function ScanPage() {
   const dupDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Field-level validation errors
-  const [fieldErrors, setFieldErrors] = useState<{ title?: string; author?: string; isbn?: string; year?: string }>({});
+  const [fieldErrors, setFieldErrors] = useState<{ title?: string; author?: string; isbn?: string; year?: string; publisher?: string; category?: string }>({});
   const [optionalWarned, setOptionalWarned] = useState<Set<string>>(new Set());
 
   // Derived counters from actual records (survives refresh, accounts for quantity)
@@ -124,7 +127,7 @@ function ScanPage() {
   // --- Validation helpers ---
   function validateIsbn(isbn: string): string | null {
     const clean = isbn.replace(/[\s-]/g, "");
-    if (!clean) return null; // optional
+    if (!clean) return "ISBN is required.";
     if (clean.length === 10) {
       const sum = clean.split("").reduce((acc, ch, i) =>
         i < 9 ? acc + parseInt(ch) * (10 - i) : acc + (ch === "X" ? 10 : parseInt(ch)), 0);
@@ -140,7 +143,7 @@ function ScanPage() {
   }
 
   function validateYear(year: string): string | null {
-    if (!year.trim()) return null; // optional
+    if (!year.trim()) return "Year is required.";
     const y = parseInt(year.trim());
     const current = new Date().getFullYear();
     if (isNaN(y) || y < 1450 || y > current) return `Enter a year between 1450 and ${current}.`;
@@ -216,6 +219,7 @@ function ScanPage() {
   const performLookup = async (code: string) => {
     if (!code) return;
     
+    setLookupStatus("checking-local");
     setIsLookingUp(true);
     const loadingToast = toast.loading(`Looking up ${code}...`);
     
@@ -233,10 +237,13 @@ function ScanPage() {
         setEditTarget(existingDbBook as BookRow);
         setForm({ ...empty, isbn: code });
         setPaused(true);
+        setLookupStatus("done");
+        setIsLookingUp(false);
         return;
       }
 
-      // 2. Fallback to Google Books
+      setLookupStatus("searching-online");
+      // 2. Fetch from external providers
       const meta = await lookupIsbn(code);
       
       if (meta && (meta.title || meta.author)) {
@@ -265,6 +272,7 @@ function ScanPage() {
       setForm((f) => ({ ...f, isbn: code }));
       setStep("review");
     } finally {
+      setLookupStatus("done");
       setIsLookingUp(false);
     }
   };
@@ -300,12 +308,16 @@ function ScanPage() {
     const trimmedYear = form.year?.trim();
     const qty = Number(form.quantity);
 
-    // Only Title and Author are hard-required
-    const errors: { title?: string; author?: string; year?: string } = {};
+    const errors: { title?: string; author?: string; year?: string; isbn?: string; publisher?: string; category?: string } = {};
     if (!trimmedTitle) errors.title = "Title is required.";
     if (!trimmedAuthor) errors.author = "Author is required.";
-    // BUG 7 FIX: Validate year inside save(), not just on blur.
-    if (trimmedYear) {
+    if (!trimmedIsbn) errors.isbn = "ISBN is required.";
+    if (!trimmedPublisher) errors.publisher = "Publisher is required.";
+    if (!form.category?.trim()) errors.category = "Category is required.";
+    
+    if (!trimmedYear) {
+      errors.year = "Year is required.";
+    } else {
       const y = parseInt(trimmedYear);
       const current = new Date().getFullYear();
       if (isNaN(y) || y < 1450 || y > current) {
@@ -735,6 +747,16 @@ function ScanPage() {
               <div className="col-span-2 text-xs text-muted-foreground">
                 Scan a barcode or enter an ISBN — once found, you'll be taken to a quick details page.
               </div>
+              {lookupStatus === "checking-local" && (
+                <div className="col-span-2">
+                  <p className="text-xs text-muted-foreground font-medium animate-pulse">Checking catalog…</p>
+                </div>
+              )}
+              {lookupStatus === "searching-online" && (
+                <div className="col-span-2">
+                  <p className="text-xs text-muted-foreground font-medium animate-pulse">Not in catalog — searching online…</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </GlassCard>
@@ -800,7 +822,7 @@ function ScanPage() {
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  ISBN <span className="text-muted-foreground/60 font-normal normal-case">(optional)</span>
+                  ISBN <span className="text-destructive normal-case">*</span>
                 </Label>
                 <Input
                   value={form.isbn}
@@ -886,18 +908,24 @@ function ScanPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Publisher <span className="text-muted-foreground/60 font-normal normal-case">(optional)</span>
+                    Publisher <span className="text-destructive normal-case">*</span>
                   </Label>
                   <Input
                     value={form.publisher}
-                    onChange={(e) => setForm({ ...form, publisher: e.target.value })}
-                    onBlur={() => { if (!form.publisher?.trim()) setOptionalWarned(s => new Set(s).add('publisher')); }}
-                    className={`h-11 rounded-lg ${optionalWarned.has('publisher') && !form.publisher?.trim() ? 'border-amber-400/60' : ''}`}
+                    onChange={(e) => {
+                      setForm({ ...form, publisher: e.target.value });
+                      setFieldErrors(fe => ({ ...fe, publisher: undefined }));
+                    }}
+                    onBlur={(e) => {
+                      if (!e.target.value.trim()) setFieldErrors(fe => ({ ...fe, publisher: "Publisher is required." }));
+                    }}
+                    className={`h-11 rounded-lg ${fieldErrors.publisher ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                   />
+                  {fieldErrors.publisher && <p className="text-xs text-destructive">{fieldErrors.publisher}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Year <span className="text-muted-foreground/60 font-normal normal-case">(optional)</span>
+                    Year <span className="text-destructive normal-case">*</span>
                   </Label>
                   <Input
                     value={form.year}
@@ -905,10 +933,9 @@ function ScanPage() {
                     onBlur={(e) => {
                       const err = validateYear(e.target.value);
                       if (err) setFieldErrors(fe => ({ ...fe, year: err }));
-                      else if (!e.target.value.trim()) setOptionalWarned(s => new Set(s).add('year'));
                     }}
                     inputMode="numeric"
-                    className={`h-11 rounded-lg ${fieldErrors.year ? 'border-destructive' : optionalWarned.has('year') && !form.year?.trim() ? 'border-amber-400/60' : ''}`}
+                    className={`h-11 rounded-lg ${fieldErrors.year ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                   />
                   {fieldErrors.year && <p className="text-xs text-destructive">{fieldErrors.year}</p>}
                 </div>
@@ -916,33 +943,22 @@ function ScanPage() {
             </div>
           </div>
 
-          {/* Optional field summary */}
-          {(() => {
-            const empties = [
-              !form.publisher?.trim() && 'Publisher',
-              !form.year?.trim() && 'Year',
-            ].filter(Boolean) as string[];
-            return empties.length > 0 ? (
-              <p className="text-xs text-amber-600 dark:text-amber-400 px-1">
-                {empties.length} field{empties.length > 1 ? 's are' : ' is'} empty — record will be saved as incomplete.
-                {' '}Empty: {empties.join(', ')}.
-              </p>
-            ) : null;
-          })()}
-
           {/* Actions */}
           <div className="flex flex-col gap-2.5">
             <Button
               onClick={() => {
-                const errors: { title?: string; author?: string } = {};
+                const errors: { title?: string; author?: string; isbn?: string; publisher?: string; year?: string } = {};
                 if (!form.title?.trim()) errors.title = "Title is required.";
                 if (!form.author?.trim()) errors.author = "Author is required.";
+                if (!form.isbn?.trim()) errors.isbn = "ISBN is required.";
+                if (!form.publisher?.trim()) errors.publisher = "Publisher is required.";
+                if (!form.year?.trim()) errors.year = "Year is required.";
                 if (Object.keys(errors).length > 0) {
                   setFieldErrors(errors);
-                  toast.error("Please fill in Title and Author.");
+                  toast.error("Please fill in all required fields.");
                   return;
                 }
-                if (fieldErrors.isbn || fieldErrors.year) {
+                if (fieldErrors.isbn || fieldErrors.year || fieldErrors.publisher) {
                   toast.error("Fix validation errors before continuing.");
                   return;
                 }
@@ -1070,7 +1086,7 @@ function ScanPage() {
             {/* Category */}
             <div className="space-y-1.5">
               <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                Category <span className="text-muted-foreground/60 font-normal normal-case">(optional)</span>
+                Category <span className="text-destructive normal-case">*</span>
               </Label>
               <Select
                 value={form.category}
