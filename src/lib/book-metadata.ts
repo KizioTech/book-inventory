@@ -13,6 +13,10 @@ export interface BookMeta {
 interface BookMetaRow {
   title: string | null;
   author: string | null;
+  author_2?: string | null;
+  author_3?: string | null;
+  author_4?: string | null;
+  author_5?: string | null;
   publisher: string | null;
   year: string | null;
   category: string | null;
@@ -20,9 +24,13 @@ interface BookMetaRow {
 }
 
 function rowToBookMeta(d: BookMetaRow): BookMeta {
+  const combinedAuthors = [d.author, d.author_2, d.author_3, d.author_4, d.author_5]
+    .filter(Boolean)
+    .join(", ");
+
   return {
     title:     d.title     ?? "",
-    author:    d.author    ?? "",
+    author:    combinedAuthors ?? "",
     publisher: d.publisher ?? "",
     year:      d.year      ?? "",
     category:  d.category  ?? "",
@@ -43,7 +51,7 @@ const db = supabase as any;
 export function splitAuthors(authorString: string | null): string[] {
   if (!authorString) return [];
   return authorString
-    .split(";")
+    .split(/[,;]/)
     .map((a) => a.trim())
     .filter(Boolean)
     .slice(0, 5);
@@ -57,7 +65,7 @@ export async function lookupMetadataByIsbn(
 
   const { data } = (await db
     .from("book_metadata")
-    .select("title, author, publisher, year, category, isbn")
+    .select("title, author, author_2, author_3, author_4, author_5, publisher, year, category, isbn")
     .eq("isbn", clean)
     .maybeSingle()) as { data: BookMetaRow | null };
 
@@ -78,7 +86,7 @@ export async function searchMetadataByTitle(
 
   let request = db
     .from("book_metadata")
-    .select("title, author, publisher, year, category, isbn")
+    .select("title, author, author_2, author_3, author_4, author_5, publisher, year, category, isbn")
     .ilike("title", `%${query.trim()}%`)
     .limit(limit);
 

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /// <reference lib="deno.window" />
 
 import {

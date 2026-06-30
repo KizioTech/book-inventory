@@ -1,4 +1,4 @@
-import { lookupMetadataByIsbn, type BookMeta } from "./book-metadata";
+import { lookupMetadataByIsbn, type BookMeta, splitAuthors } from "./book-metadata";
 import { supabase } from "@/integrations/supabase/client";
 
 async function fetchWithTimeout(url: string, ms = 2500): Promise<Response | null> {
@@ -58,6 +58,7 @@ async function fetchOpenLibrary(isbn: string): Promise<BookMeta | null> {
 }
 
 async function cacheToLocalPool(isbn: string, meta: BookMeta): Promise<void> {
+  const authorsArray = splitAuthors(meta.author);
   try {
     await supabase
       .from("book_metadata")
@@ -65,7 +66,11 @@ async function cacheToLocalPool(isbn: string, meta: BookMeta): Promise<void> {
         {
           isbn,
           title: meta.title,
-          author: meta.author || null,
+          author: authorsArray[0] || null,
+          author_2: authorsArray[1] || null,
+          author_3: authorsArray[2] || null,
+          author_4: authorsArray[3] || null,
+          author_5: authorsArray[4] || null,
           publisher: meta.publisher || null,
           year: meta.year || null,
           category: meta.category || null,

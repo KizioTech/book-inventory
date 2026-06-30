@@ -488,7 +488,7 @@ function ScanPage() {
       book_copies: r.quantity ?? 0,
       status: r.condition ?? "",
       shelf_location: r.shelf_location ?? "",
-      remarks: (r as any).notes ?? "",
+      remarks: ((r as unknown as { notes?: string }).notes) ?? "",
     }));
 
     const columns: (keyof (typeof rows)[0])[] = [
