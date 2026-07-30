@@ -550,18 +550,11 @@ function UsersTab() {
       newRole: "clerk" | "admin" | "super_admin";
       selected: string[];
     }) => {
-      if (myRole === "super_admin") {
-        await supabase.from("user_roles").delete().eq("user_id", uid);
-        await supabase
-          .from("user_roles")
-          .insert({ user_id: uid, role: newRole });
-      }
-      await supabase.from("clerk_schools").delete().eq("clerk_id", uid);
-      if (selected.length) {
-        await supabase
-          .from("clerk_schools")
-          .insert(selected.map((sid) => ({ clerk_id: uid, school_id: sid })));
-      }
+      const { data, error } = await supabase.functions.invoke("update-user", {
+        body: { user_id: uid, role: newRole, school_ids: selected },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => {
       toast.success("User updated");

@@ -8,6 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 UI-REDESIGN
 android 
+android-wrapper
 node_modules
 dist
 dist-ssr
@@ -31,3 +32,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
