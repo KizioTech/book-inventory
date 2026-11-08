@@ -8,6 +8,7 @@ import '../features/scan/scan_screen.dart';
 import '../features/clerk/clerk_dashboard_screen.dart';
 import '../features/admin/admin_dashboard_screen.dart';
 import '../features/account/account_settings_screen.dart';
+import '../features/duplicates/resolve_duplicates_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -45,6 +46,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/account',
         builder: (context, state) => const AccountSettingsScreen(),
       ),
+      GoRoute(
+        path: '/resolve-duplicates',
+        builder: (context, state) => const ResolveDuplicatesScreen(),
+      ),
     ],
     redirect: (context, state) {
       final isAuthLoading = authState.isLoading;
@@ -69,8 +74,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         }
       }
 
-      // 3. Role guarding: Clerks cannot access /admin
-      if (state.matchedLocation.startsWith('/admin') && !(auth?.isAdmin ?? false)) {
+      // 3. Role guarding: Clerks cannot access admin routes
+      final isAdminOnlyRoute = state.matchedLocation.startsWith('/admin') ||
+          state.matchedLocation.startsWith('/resolve-duplicates');
+      if (isAdminOnlyRoute && !(auth?.isAdmin ?? false)) {
         return '/scan';
       }
 

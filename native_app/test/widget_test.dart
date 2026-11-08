@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:book_inventory/core/validators.dart';
+import 'package:book_inventory/features/duplicates/resolve_duplicates_screen.dart';
 import 'package:book_inventory/shared/utils/author_split.dart';
 import 'package:book_inventory/shared/utils/csv.dart';
 
@@ -60,6 +61,59 @@ void main() {
       expect(parsed.length, equals(1));
       expect(parsed.first['book_title'], equals('Test Book'));
       expect(parsed.first['isbn'], equals('9780306406157'));
+    });
+  });
+
+  group('Duplicate Resolution Completeness Score Test', () {
+    test('Calculates completeness score accurately across 7 tracked fields', () {
+      final recordA = {
+        'title': 'Mathematics Grade 10',
+        'author': 'Jane Doe',
+        'publisher': 'Futec',
+        'isbn': '9780306406157',
+        'year': '2022',
+        'category': 'Mathematics',
+        'condition': 'Good',
+      };
+      final recordB = {
+        'title': 'Mathematics Grade 10',
+        'author': 'Jane Doe',
+        'isbn': '9780306406157',
+        'publisher': '',
+        'year': null,
+      };
+
+      expect(completenessScore(recordA), equals(7));
+      expect(completenessScore(recordB), equals(3));
+    });
+
+    test('Correctly identifies master record from list by highest completeness', () {
+      final records = [
+        {
+          'id': 'rec-1',
+          'title': 'Physics Vol 1',
+          'author': 'Isaac Newton',
+          'isbn': '9780306406157',
+          'quantity': 2,
+        },
+        {
+          'id': 'rec-2',
+          'title': 'Physics Vol 1',
+          'author': 'Isaac Newton',
+          'publisher': 'Royal Society',
+          'year': '1687',
+          'category': 'Science',
+          'condition': 'Fair',
+          'isbn': '9780306406157',
+          'quantity': 1,
+        },
+      ];
+
+      records.sort((a, b) => completenessScore(b).compareTo(completenessScore(a)));
+
+      expect(records.first['id'], equals('rec-2'));
+      final totalQuantity = records.fold<int>(0, (sum, r) => sum + ((r['quantity'] as num?)?.toInt() ?? 1));
+      expect(totalQuantity, equals(3));
     });
   });
 }

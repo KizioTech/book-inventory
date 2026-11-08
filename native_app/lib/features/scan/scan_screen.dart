@@ -62,6 +62,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
   // Assigned schools (for the picker)
   List<SchoolItem> _schools = [];
   bool _loadingSchools = true;
+  bool _schoolLocked = true;
 
   @override
   void initState() {
@@ -455,6 +456,32 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
           ],
         ),
         actions: [
+          if (_sessionIds.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.bookmark_added_rounded, size: 14, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${_sessionIds.length}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           IconButton(
             tooltip: 'View Collected Records',
             icon: const Icon(Icons.list_alt_rounded),
@@ -727,27 +754,114 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
       );
     }
     if (activeSchool == null) return const SizedBox.shrink();
-    final inList = _schools.any((s) => s.id == activeSchool.id);
-    if (_schools.length < 2 || !inList) return const SizedBox.shrink();
 
+    // When locked, show a session banner with an unlock button
+    if (_schoolLocked) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppTheme.primaryColor.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppTheme.primaryColor.withValues(alpha: 0.2),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.school, size: 18, color: AppTheme.primaryColor),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    activeSchool.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: AppTheme.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Row(
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: AppTheme.successColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Session Active • ${_sessionIds.length} scanned',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.successColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (_schools.length > 1)
+              IconButton(
+                icon: const Icon(Icons.lock_outline, size: 20),
+                tooltip: 'Unlock to switch school',
+                color: AppTheme.textSecondary,
+                onPressed: () => setState(() => _schoolLocked = false),
+              ),
+          ],
+        ),
+      );
+    }
+
+    // When unlocked, show dropdown selector with lock button
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
-      child: DropdownButtonFormField<String>(
-        key: ValueKey('school-${activeSchool.id}'),
-        initialValue: activeSchool.id,
-        isExpanded: true,
-        decoration: const InputDecoration(
-          labelText: 'Active School',
-          prefixIcon: Icon(Icons.school_outlined),
-        ),
-        items: [
-          for (final s in _schools)
-            DropdownMenuItem(
-              value: s.id,
-              child: Text(s.name, overflow: TextOverflow.ellipsis),
+      child: Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              key: ValueKey('school-${activeSchool.id}'),
+              initialValue: activeSchool.id,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Active School',
+                prefixIcon: Icon(Icons.school_outlined),
+              ),
+              items: [
+                for (final s in _schools)
+                  DropdownMenuItem(
+                    value: s.id,
+                    child: Text(s.name, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: (newId) {
+                _onSchoolChanged(newId);
+                setState(() => _schoolLocked = true);
+              },
             ),
+          ),
+          const SizedBox(width: 8),
+          IconButton.filledTonal(
+            icon: const Icon(Icons.lock_open_rounded),
+            tooltip: 'Lock this school',
+            onPressed: () => setState(() => _schoolLocked = true),
+          ),
         ],
-        onChanged: _onSchoolChanged,
       ),
     );
   }

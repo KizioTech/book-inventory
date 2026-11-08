@@ -47,10 +47,10 @@ This document tracks complete functional equivalence between the legacy React/Ty
 - [x] **Duplicate Detection**: Real-time scan check against existing books for the active school with duplicate warning banner.
 - [x] **Fast Save & Next**: Immediate local SQLite persistence with non-blocking background sync queue.
 - [x] **Session Scan List**: Expandable list showing recent scans with copies, shelf location, and 1-tap **Undo**.
-- [ ] **Title Typeahead Suggestions**: Live debounce title search against `book_metadata` for books without barcodes.
-- [ ] **School Lock Toggle**: Lock switch preventing accidental school switching during active scanning.
-- [ ] **Camera Pause / Resume**: Freeze camera preview while editing form fields.
-- [ ] **Direct Item Edit from Session List**: Tap recent scan to open detail/edit dialog.
+- [x] **Title Typeahead Suggestions**: Live debounce title search against `book_metadata` for books without barcodes.
+- [x] **School Lock Toggle**: Lock switch preventing accidental school switching during active scanning.
+- [x] **Camera Pause / Resume**: Freeze camera preview while editing form fields.
+- [x] **Direct Item Edit from Session List**: Tap recent scan to open detail/edit dialog.
 
 ### C. Clerk Dashboard (`/clerk`)
 - [x] **Assigned Schools Dropdown**: Queries `clerk_schools` to only list assigned schools.
@@ -59,35 +59,36 @@ This document tracks complete functional equivalence between the legacy React/Ty
 - [x] **Offline Recovery Dialog**: Surfaces server-rejected outbox rows with specific error reasons, with options to retry or discard.
 - [x] **Search & Filter**: Client-side instant filtering by title, author, or ISBN.
 - [x] **CSV Export**: Shared 14-column standard format with UTF-8 BOM.
-- [ ] **Summary Statistics Cards**: Total books, scanned today, and assigned schools metrics.
-- [ ] **Book Detail Modal (`BookDetailSheet`)**: Full record inspection modal.
-- [ ] **Edit Record Dialog (`EditBookDialog`)**: Inline editor for existing records.
+- [x] **Summary Statistics Cards**: Total books, scanned today, and assigned schools metrics.
+- [x] **Book Detail Modal (`BookDetailSheet`)**: Full record inspection modal.
+- [x] **Edit Record Dialog (`EditBookDialog`)**: Inline editor for existing records.
 
 ### D. Manager Admin Portal (`/admin`)
 - [x] **Responsive Desktop Layout**: NavigationRail / Sidebar on Windows, adaptively switching to bottom navigation on smaller screens.
 - [x] **School Management**:
   - List all schools with active/paused status.
   - Create new school dialog (name, district, region, contact info).
+  - Edit existing school metadata and toggle active/paused status.
   - Export full inventory per school to CSV.
 - [x] **User Administration**:
   - List all users with profile avatar, email, full name, and role badges.
   - Create user dialog calling Edge Function `create-user` (immediate password or invite email flow).
+  - Edit user dialog calling Edge Function `update-user` (role update and assigned schools).
   - Revoke all user sessions calling Edge Function `revoke-all-sessions`.
   - Delete user calling Edge Function `delete-user`.
-- [x] **Inventory Exploration**: Per-school searchable inventory with server-side filtering.
-- [x] **Duplicate Resolution**: Invokes `get_duplicate_groups` RPC to view ISBN duplicate clusters.
+- [x] **Inventory Exploration**: Per-school searchable inventory with category filtering, total copy metrics, and record inspection dialog.
+- [x] **Duplicate Resolution**: Invokes `get_duplicate_groups` RPC to view ISBN duplicate clusters with direct navigation to the Duplicate Resolution Manager.
+- [x] **Shared Metadata Catalogue**:
+  - Search and browse global reference books pool in `book_metadata`.
+  - Batch CSV metadata importer with real-time progress bar.
 - [x] **Analytics Dashboard**: Summary metrics and `fl_chart` bar chart of collected books by school.
-- [ ] **Cross-School Records Table**: Organization-wide searchable and paginated inventory browser.
-- [ ] **Edit School Modal**: Edit existing school metadata and toggle active/paused status.
-- [ ] **Edit User Modal**: Update user roles and assigned schools via Edge Function `update-user`.
-- [ ] **Completeness Metrics**: Completeness percentage analysis across the 7 core fields.
-- [ ] **Bulk Metadata Catalogue Importer**: Background isolate/worker for batched CSV catalogue imports with progress reporting.
 
 ### E. Duplicate Resolution Engine (`/resolve-duplicates`)
 - [x] Group duplicates by ISBN and school via database RPC.
-- [ ] Filter duplicates by school.
-- [ ] **Automated "Merge All" Action**: Identifies the master record using the completeness scoring algorithm, sums copy counts, sets `flagged_as_duplicate = false`, and purges duplicates.
-- [ ] **Interactive Group Merge**: View conflicting copies side-by-side and select a specific master entry.
+- [x] Filter duplicates by school or view all schools.
+- [x] **Completeness Scoring Algorithm**: Ranks candidates based on non-empty values across 7 tracked fields (`title`, `author`, `publisher`, `isbn`, `year`, `category`, `condition`).
+- [x] **Automated "Merge All" Action**: Identifies master records by completeness score, sums total copy counts, marks `flagged_as_duplicate = false`, and purges duplicate rows.
+- [x] **Interactive Group Merge**: Expandable group cards inspecting individual records with "Master" vs "Copy" badges, field completeness count, and single-click group merge.
 
 ---
 

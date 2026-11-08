@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../core/constants.dart';
 import '../../core/theme.dart';
 import '../../shared/utils/csv.dart';
 import '../../data/remote/admin_api.dart';
@@ -44,8 +45,17 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   // Explore state
   List<Map<String, dynamic>> _exploreBooks = [];
   String? _selectedExploreSchoolId;
+  String? _selectedExploreCategory;
   final _exploreSearchController = TextEditingController();
   bool _isLoadingExplore = false;
+
+  // Catalogue / Shared Metadata state
+  List<Map<String, dynamic>> _catalogueResults = [];
+  final _catalogueSearchController = TextEditingController();
+  bool _isSearchingCatalogue = false;
+  bool _isImportingCatalogue = false;
+  double? _importProgress;
+  int _totalCatalogueCount = 0;
 
   @override
   void initState() {
@@ -56,6 +66,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   @override
   void dispose() {
     _exploreSearchController.dispose();
+    _catalogueSearchController.dispose();
     super.dispose();
   }
 
@@ -64,6 +75,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     _loadUsers();
     _loadDuplicates();
     _loadStats();
+    _loadCatalogueCount();
   }
 
   Future<void> _loadSchools() async {
@@ -176,6 +188,92 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             child: const Text('Create'),
           ),
         ],
+      ),
+    );
+  }
+
+  // Edit School Dialog
+  void _showEditSchoolDialog(Map<String, dynamic> school) {
+    final nameCtrl = TextEditingController(text: school['name'] ?? '');
+    final districtCtrl = TextEditingController(text: school['district'] ?? '');
+    final regionCtrl = TextEditingController(text: school['region'] ?? '');
+    final contactCtrl = TextEditingController(text: school['contact'] ?? '');
+    bool isActive = school['active'] ?? true;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Edit School'),
+          content: SizedBox(
+            width: 400,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: 'School Name *'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: districtCtrl,
+                    decoration: const InputDecoration(labelText: 'District'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: regionCtrl,
+                    decoration: const InputDecoration(labelText: 'Region'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: contactCtrl,
+                    decoration: const InputDecoration(labelText: 'Contact Info'),
+                  ),
+                  const SizedBox(height: 16),
+                  SwitchListTile(
+                    title: const Text('Active Status'),
+                    subtitle: Text(isActive ? 'Accepting inventory scans' : 'Paused / Inactive'),
+                    value: isActive,
+                    onChanged: (val) => setDialogState(() => isActive = val),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameCtrl.text.trim().isEmpty) return;
+                try {
+                  await _schoolsApi.updateSchool(school['id'] as String, {
+                    'name': nameCtrl.text.trim(),
+                    'district': districtCtrl.text.trim().isEmpty ? null : districtCtrl.text.trim(),
+                    'region': regionCtrl.text.trim().isEmpty ? null : regionCtrl.text.trim(),
+                    'contact': contactCtrl.text.trim().isEmpty ? null : contactCtrl.text.trim(),
+                    'active': isActive,
+                  });
+                  if (ctx.mounted) {
+                    Navigator.of(ctx).pop();
+                    _loadSchools();
+                  }
+                } catch (e) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(content: Text('Failed to update school: $e')),
+                    );
+                  }
+                }
+              },
+              child: const Text('Save Changes'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -314,6 +412,237 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     );
   }
 
+  // Edit User Dialog (calling Edge Function update-user)
+  void _showEditUserDialog(Map<String, dynamic> user) {
+    final roles = (user['user_roles'] as List?)
+            ?.map((r) => r['role'].toString())
+            .toList() ??
+        [];
+    String currentRole = roles.contains('admin') ? 'admin' : 'clerk';
+
+    final clerkSchools = (user['clerk_schools'] as List?)
+            ?.map((cs) => cs['school_id'].toString())
+            .toList() ??
+        [];
+    List<String> selectedSchoolIds = List.from(clerkSchools);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('Edit User: ${user["full_name"] ?? user["email"]}'),
+          content: SizedBox(
+            width: 450,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Email: ${user["email"] ?? "N/A"}',
+                      style: const TextStyle(color: AppTheme.textSecondary)),
+                  const SizedBox(height: 16),
+                  const Text('Role', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'clerk', label: Text('Clerk (Collector)')),
+                      ButtonSegment(value: 'admin', label: Text('Admin (Manager)')),
+                    ],
+                    selected: {currentRole},
+                    onSelectionChanged: (set) {
+                      setDialogState(() => currentRole = set.first);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  if (currentRole == 'clerk') ...[
+                    const Text('Assigned Schools',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 180,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ListView.builder(
+                        itemCount: _schools.length,
+                        itemBuilder: (ctx, idx) {
+                          final s = _schools[idx];
+                          final id = s['id'] as String;
+                          final isSelected = selectedSchoolIds.contains(id);
+                          return CheckboxListTile(
+                            dense: true,
+                            title: Text(s['name'] ?? ''),
+                            subtitle: s['district'] != null ? Text(s['district']) : null,
+                            value: isSelected,
+                            onChanged: (checked) {
+                              setDialogState(() {
+                                if (checked == true) {
+                                  selectedSchoolIds.add(id);
+                                } else {
+                                  selectedSchoolIds.remove(id);
+                                }
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  await _adminApi.updateUser(
+                    userId: user['id'] as String,
+                    role: currentRole,
+                    schoolIds: currentRole == 'clerk' ? selectedSchoolIds : null,
+                  );
+                  if (ctx.mounted) {
+                    Navigator.of(ctx).pop();
+                    _loadUsers();
+                  }
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('User updated successfully!'),
+                        backgroundColor: AppTheme.successColor,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(content: Text('Failed to update user: $e')),
+                    );
+                  }
+                }
+              },
+              child: const Text('Save Changes'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Catalogue Management
+  Future<void> _loadCatalogueCount() async {
+    try {
+      final res = await supabase.from('book_metadata').select('isbn');
+      if (mounted) {
+        setState(() => _totalCatalogueCount = (res as List).length);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _searchCatalogue(String query) async {
+    if (query.trim().length < 2) {
+      setState(() => _catalogueResults = []);
+      return;
+    }
+    setState(() => _isSearchingCatalogue = true);
+    try {
+      final results = await _booksApi.searchMetadataByTitle(query.trim(), limit: 50);
+      if (mounted) setState(() => _catalogueResults = results);
+    } catch (_) {}
+    if (mounted) setState(() => _isSearchingCatalogue = false);
+  }
+
+  Future<void> _importCatalogueCsv() async {
+    final file = await FilePicker.pickFile(
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+    );
+    if (file == null) return;
+
+    final bytes = await file.readAsBytes();
+    final csvString = utf8.decode(bytes);
+    final parsed = CsvUtils.parseCsv(csvString);
+    if (parsed.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No valid rows found in selected CSV.')),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _isImportingCatalogue = true;
+      _importProgress = 0.0;
+    });
+
+    final total = parsed.length;
+    int processed = 0;
+    const batchSize = 50;
+
+    for (var i = 0; i < total; i += batchSize) {
+      final chunk = parsed.sublist(i, (i + batchSize > total) ? total : i + batchSize);
+      final batchPayload = chunk.map((r) {
+        final rawIsbn = (r['isbn'] ?? '')
+            .toString()
+            .replaceAll(RegExp(r'[^0-9Xx]'), '')
+            .trim();
+        final isbn = rawIsbn.isNotEmpty ? rawIsbn : null;
+        final rawAuthor = (r['author'] ?? '').toString();
+        final authors = rawAuthor
+            .split(RegExp(r'[,;]'))
+            .map((a) => a.trim())
+            .where((a) => a.isNotEmpty)
+            .toList();
+
+        return {
+          ?isbn: isbn,
+          'title': r['book_title'] ?? r['title'] ?? '',
+          'author': authors.isNotEmpty ? authors[0] : (r['author'] ?? ''),
+          'author_2': authors.length > 1 ? authors[1] : r['author_2'],
+          'author_3': authors.length > 2 ? authors[2] : r['author_3'],
+          'author_4': authors.length > 3 ? authors[3] : r['author_4'],
+          'author_5': authors.length > 4 ? authors[4] : r['author_5'],
+          'publisher': r['publisher'] ?? r['publisher_name'],
+          'year': r['year_published'] ?? r['year'] ?? r['copyright_year'],
+          'category': r['category_name'] ?? r['category'],
+        };
+      }).where((m) => (m['title'] as String).isNotEmpty && m['isbn'] != null).toList();
+
+      if (batchPayload.isNotEmpty) {
+        try {
+          await supabase.from('book_metadata').upsert(batchPayload, onConflict: 'isbn');
+        } catch (e) {
+          debugPrint('Batch upsert error: $e');
+        }
+      }
+
+      processed += chunk.length;
+      if (mounted) {
+        setState(() => _importProgress = processed / total);
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _isImportingCatalogue = false;
+        _importProgress = null;
+      });
+      _loadCatalogueCount();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Catalogue import complete! Processed $total rows.'),
+          backgroundColor: AppTheme.successColor,
+        ),
+      );
+    }
+  }
+
   Future<void> _exportSchoolInventory(String schoolId, String schoolName) async {
     final books = await _booksApi.fetchBooksForSchool(schoolId, limit: 10000);
     final fileName = '${schoolName.replaceAll(" ", "_")}_Inventory.csv';
@@ -413,6 +742,11 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                   selectedIcon: Icon(Icons.copy_all),
                   label: Text('Duplicates'),
                 ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.auto_stories_outlined),
+                  selectedIcon: Icon(Icons.auto_stories),
+                  label: Text('Catalogue'),
+                ),
               ],
             ),
           const VerticalDivider(thickness: 1, width: 1),
@@ -432,6 +766,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Users'),
                 BottomNavigationBarItem(icon: Icon(Icons.manage_search), label: 'Explore'),
                 BottomNavigationBarItem(icon: Icon(Icons.copy_all), label: 'Duplicates'),
+                BottomNavigationBarItem(icon: Icon(Icons.auto_stories), label: 'Catalogue'),
               ],
             )
           : null,
@@ -450,6 +785,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         return _buildExploreTab();
       case 4:
         return _buildDuplicatesTab();
+      case 5:
+        return _buildCatalogueTab();
       default:
         return const SizedBox.shrink();
     }
@@ -671,6 +1008,11 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                               ),
                               const SizedBox(width: 8),
                               IconButton(
+                                icon: const Icon(Icons.edit_outlined),
+                                tooltip: 'Edit School',
+                                onPressed: () => _showEditSchoolDialog(s),
+                              ),
+                              IconButton(
                                 icon: const Icon(Icons.download_rounded),
                                 tooltip: 'Export School CSV',
                                 onPressed: () =>
@@ -771,7 +1113,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                               PopupMenuButton<String>(
                                 onSelected: (val) async {
                                   final uid = u['id'] as String;
-                                  if (val == 'revoke') {
+                                  if (val == 'edit') {
+                                    _showEditUserDialog(u);
+                                  } else if (val == 'revoke') {
                                     await _adminApi.revokeAllSessions(uid);
                                     if (mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(
@@ -784,6 +1128,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                                   }
                                 },
                                 itemBuilder: (ctx) => [
+                                  const PopupMenuItem(
+                                    value: 'edit',
+                                    child: Text('Edit Role & Schools'),
+                                  ),
                                   const PopupMenuItem(
                                     value: 'revoke',
                                     child: Text('Revoke Sessions'),
@@ -811,27 +1159,61 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
 
   // Explore Tab
   Widget _buildExploreTab() {
+    final displayedBooks = _exploreBooks.where((b) {
+      if (_selectedExploreCategory != null &&
+          _selectedExploreCategory!.isNotEmpty &&
+          b['category'] != _selectedExploreCategory) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    final totalCopies = displayedBooks.fold<int>(
+      0,
+      (sum, b) => sum + ((b['quantity'] as num?)?.toInt() ?? 1),
+    );
+
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Explore School Inventory',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Explore School Inventory',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    'Search and audit collected records per school',
+                    style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                  ),
+                ],
+              ),
+              if (displayedBooks.isNotEmpty)
+                Chip(
+                  avatar: const Icon(Icons.menu_book, size: 16),
+                  label: Text('${displayedBooks.length} titles • $totalCopies copies'),
+                ),
+            ],
           ),
           const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
-                flex: 1,
+                flex: 2,
                 child: DropdownButtonFormField<String>(
                   initialValue: _selectedExploreSchoolId,
                   hint: const Text('Select a school'),
+                  isExpanded: true,
                   items: _schools.map((s) {
                     return DropdownMenuItem(
                       value: s['id'] as String,
-                      child: Text(s['name'] as String),
+                      child: Text(s['name'] as String, overflow: TextOverflow.ellipsis),
                     );
                   }).toList(),
                   onChanged: (val) {
@@ -842,9 +1224,24 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                   },
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
                 flex: 2,
+                child: DropdownButtonFormField<String?>(
+                  initialValue: _selectedExploreCategory,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('All Categories')),
+                    for (final cat in kBookCategories)
+                      DropdownMenuItem(value: cat, child: Text(cat, overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: (cat) => setState(() => _selectedExploreCategory = cat),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 3,
                 child: TextField(
                   controller: _exploreSearchController,
                   decoration: InputDecoration(
@@ -875,32 +1272,128 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           Expanded(
             child: _isLoadingExplore
                 ? const Center(child: CircularProgressIndicator())
-                : _exploreBooks.isEmpty
+                : _selectedExploreSchoolId == null
                     ? const Center(
-                        child: Text('Select a school to view records.'),
+                        child: Text(
+                          'Select a school above to inspect its collected inventory.',
+                          style: TextStyle(color: AppTheme.textSecondary),
+                        ),
                       )
-                    : ListView.separated(
-                        itemCount: _exploreBooks.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
-                        itemBuilder: (ctx, idx) {
-                          final b = _exploreBooks[idx];
-                          return Card(
-                            child: ListTile(
-                              title: Text(
-                                b['title'] ?? 'Untitled',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              subtitle: Text(
-                                '${b["author"] ?? "Unknown"} • ${b["quantity"]} copies • Shelf: ${b["shelf_location"] ?? "Unassigned"}',
-                              ),
-                              trailing: Text(
-                                b['isbn'] ?? '',
-                                style: const TextStyle(color: AppTheme.textSecondary),
-                              ),
+                    : displayedBooks.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No matching book records found for this filter.',
+                              style: TextStyle(color: AppTheme.textSecondary),
                             ),
-                          );
-                        },
-                      ),
+                          )
+                        : ListView.separated(
+                            itemCount: displayedBooks.length,
+                            separatorBuilder: (_, _) => const SizedBox(height: 8),
+                            itemBuilder: (ctx, idx) {
+                              final b = displayedBooks[idx];
+                              return Card(
+                                child: ListTile(
+                                  onTap: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        title: Text(b['title'] ?? 'Untitled'),
+                                        content: SizedBox(
+                                          width: 400,
+                                          child: SingleChildScrollView(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                _buildDetailRow('Author', b['author'] ?? '—'),
+                                                if (b['author_2'] != null)
+                                                  _buildDetailRow('Author 2', b['author_2']),
+                                                if (b['author_3'] != null)
+                                                  _buildDetailRow('Author 3', b['author_3']),
+                                                _buildDetailRow('ISBN', b['isbn'] ?? '—'),
+                                                _buildDetailRow('Publisher', b['publisher'] ?? '—'),
+                                                _buildDetailRow('Year', b['year'] ?? '—'),
+                                                _buildDetailRow('Category', b['category'] ?? '—'),
+                                                _buildDetailRow('Condition', b['condition'] ?? '—'),
+                                                _buildDetailRow('Copies', '${b["quantity"] ?? 1}'),
+                                                _buildDetailRow('Shelf', b['shelf_location'] ?? '—'),
+                                                if (b['notes'] != null)
+                                                  _buildDetailRow('Notes', b['notes']),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.of(ctx).pop(),
+                                            child: const Text('Close'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                  leading: CircleAvatar(
+                                    backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
+                                    child: const Icon(Icons.book, color: AppTheme.primaryColor, size: 20),
+                                  ),
+                                  title: Text(
+                                    b['title'] ?? 'Untitled',
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  subtitle: Text(
+                                    '${b["author"] ?? "Unknown"} • ${b["quantity"]} copies • Category: ${b["category"] ?? "General"}',
+                                  ),
+                                  trailing: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        b['isbn'] ?? '',
+                                        style: const TextStyle(
+                                          fontFamily: 'monospace',
+                                          fontSize: 12,
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Shelf: ${b["shelf_location"] ?? "Unassigned"}',
+                                        style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 13),
+            ),
           ),
         ],
       ),
@@ -917,13 +1410,37 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Duplicate Resolutions',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Duplicate Resolutions',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    'Manage books with identical ISBN numbers',
+                    style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                  ),
+                ],
               ),
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                onPressed: _loadDuplicates,
+              Row(
+                children: [
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                    ),
+                    icon: const Icon(Icons.call_merge, size: 18),
+                    label: const Text('Review & Merge'),
+                    onPressed: () => context
+                        .push('/resolve-duplicates')
+                        .then((_) => _loadDuplicates()),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    onPressed: _loadDuplicates,
+                  ),
+                ],
               ),
             ],
           ),
@@ -942,6 +1459,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                           final d = _duplicates[idx];
                           return Card(
                             child: ListTile(
+                              onTap: () => context
+                                  .push('/resolve-duplicates')
+                                  .then((_) => _loadDuplicates()),
                               leading: const CircleAvatar(
                                 backgroundColor: Color(0xFFFEF3C7),
                                 child: Icon(Icons.copy, color: AppTheme.warningColor),
@@ -951,13 +1471,172 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                                 style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
                               subtitle: Text('ISBN: ${d["isbn"]} • Author: ${d["author"] ?? "N/A"}'),
-                              trailing: Chip(
-                                label: Text('${d["duplicate_count"]} duplicates'),
-                                backgroundColor: AppTheme.warningColor.withValues(alpha: 0.15),
-                                labelStyle: const TextStyle(
-                                  color: AppTheme.warningColor,
-                                  fontWeight: FontWeight.bold,
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Chip(
+                                    label: Text('${d["duplicate_count"]} duplicates'),
+                                    backgroundColor: AppTheme.warningColor.withValues(alpha: 0.15),
+                                    labelStyle: const TextStyle(
+                                      color: AppTheme.warningColor,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.chevron_right, color: AppTheme.textSecondary),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Catalogue Tab
+  Widget _buildCatalogueTab() {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Shared Metadata Catalogue',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    '$_totalCatalogueCount books in the global lookup pool',
+                    style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () {
+                  _loadCatalogueCount();
+                  if (_catalogueSearchController.text.isNotEmpty) {
+                    _searchCatalogue(_catalogueSearchController.text);
+                  }
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // CSV Import Card
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.upload_file_outlined, color: AppTheme.primaryColor),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Import Reference Catalogue from CSV',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      const Spacer(),
+                      ElevatedButton.icon(
+                        icon: _isImportingCatalogue
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
                                 ),
+                              )
+                            : const Icon(Icons.file_upload_outlined, size: 16),
+                        label: Text(_isImportingCatalogue ? 'Importing…' : 'Choose CSV File'),
+                        onPressed: _isImportingCatalogue ? null : _importCatalogueCsv,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Supports columns: book_title, author, isbn, publisher, year_published, category_name. '
+                    'Books will be added to the shared lookup database for instant barcode auto-fill.',
+                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                  ),
+                  if (_importProgress != null) ...[
+                    const SizedBox(height: 12),
+                    LinearProgressIndicator(value: _importProgress),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${(_importProgress! * 100).toStringAsFixed(0)}% completed',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Search & Browse
+          TextField(
+            controller: _catalogueSearchController,
+            decoration: InputDecoration(
+              hintText: 'Search catalogue by title or keyword…',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _catalogueSearchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 18),
+                      onPressed: () {
+                        _catalogueSearchController.clear();
+                        setState(() => _catalogueResults = []);
+                      },
+                    )
+                  : null,
+            ),
+            onChanged: _searchCatalogue,
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: _isSearchingCatalogue
+                ? const Center(child: CircularProgressIndicator())
+                : _catalogueResults.isEmpty
+                    ? Center(
+                        child: Text(
+                          _catalogueSearchController.text.length < 2
+                              ? 'Type at least 2 characters to search reference books.'
+                              : 'No matching reference books found.',
+                          style: const TextStyle(color: AppTheme.textSecondary),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: _catalogueResults.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (ctx, idx) {
+                          final item = _catalogueResults[idx];
+                          return Card(
+                            child: ListTile(
+                              leading: const CircleAvatar(
+                                backgroundColor: Color(0xFFF1F5F9),
+                                child: Icon(Icons.menu_book, color: AppTheme.primaryColor),
+                              ),
+                              title: Text(
+                                item['title'] ?? 'Untitled',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Text(
+                                '${item["author"] ?? "Unknown Author"}'
+                                '${item["publisher"] != null ? " • ${item["publisher"]}" : ""}'
+                                '${item["year"] != null ? " (${item["year"]})" : ""}',
+                              ),
+                              trailing: Chip(
+                                label: Text(item['isbn'] ?? 'No ISBN'),
+                                visualDensity: VisualDensity.compact,
                               ),
                             ),
                           );
