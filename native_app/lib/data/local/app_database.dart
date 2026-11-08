@@ -1,15 +1,12 @@
-import 'dart:io';
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
+import 'connection/connection.dart' as impl;
 import 'tables.dart';
 
 part 'app_database.g.dart';
 
 @DriftDatabase(tables: [Books, Outbox, MetadataCache, SchoolsTable])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
+  AppDatabase([QueryExecutor? executor]) : super(executor ?? impl.openConnection());
 
   @override
   int get schemaVersion => 1;
@@ -104,12 +101,4 @@ class AppDatabase extends _$AppDatabase {
   Future<List<SchoolsTableData>> getAllSchools() {
     return (select(schoolsTable)..where((t) => t.active.equals(true))).get();
   }
-}
-
-LazyDatabase _openConnection() {
-  return LazyDatabase(() async {
-    final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbFolder.path, 'book_inventory.sqlite'));
-    return NativeDatabase.createInBackground(file);
-  });
 }
