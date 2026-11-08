@@ -119,17 +119,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       children: [
                         // App Logo & Header
                         Center(
-                          child: Container(
-                            width: 64,
-                            height: 64,
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Icon(
-                              Icons.menu_book_rounded,
-                              size: 36,
-                              color: AppTheme.primaryColor,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.asset(
+                              'assets/blue-logo.png',
+                              width: 72,
+                              height: 72,
+                              fit: BoxFit.cover,
                             ),
                           ),
                         ),

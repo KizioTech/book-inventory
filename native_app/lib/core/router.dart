@@ -7,6 +7,7 @@ import '../features/auth/reset_password_screen.dart';
 import '../features/scan/scan_screen.dart';
 import '../features/clerk/clerk_dashboard_screen.dart';
 import '../features/admin/admin_dashboard_screen.dart';
+import '../features/account/account_settings_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -39,6 +40,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/admin',
         builder: (context, state) => const AdminDashboardScreen(),
+      ),
+      GoRoute(
+        path: '/account',
+        builder: (context, state) => const AccountSettingsScreen(),
       ),
     ],
     redirect: (context, state) {

@@ -351,7 +351,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           PopupMenuButton<String>(
             icon: const Icon(Icons.account_circle_outlined),
             onSelected: (val) async {
-              if (val == 'logout') {
+              if (val == 'account') {
+                context.push('/account');
+              } else if (val == 'logout') {
                 await supabase.auth.signOut();
                 if (context.mounted) {
                   context.go('/auth');
@@ -359,6 +361,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
               }
             },
             itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                  value: 'account', child: Text('Account Settings')),
               const PopupMenuItem(value: 'logout', child: Text('Sign Out')),
             ],
           ),
@@ -371,6 +375,18 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
               selectedIndex: _selectedIndex,
               onDestinationSelected: (idx) => setState(() => _selectedIndex = idx),
               labelType: NavigationRailLabelType.all,
+              leading: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.asset(
+                    'assets/blue-logo.png',
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
               destinations: const [
                 NavigationRailDestination(
                   icon: Icon(Icons.analytics_outlined),

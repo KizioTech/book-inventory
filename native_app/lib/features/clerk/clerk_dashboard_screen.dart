@@ -9,10 +9,12 @@ import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../core/theme.dart';
 import '../../shared/utils/csv.dart';
+import '../../data/local/app_database.dart';
 import '../../data/remote/supabase_client.dart';
 import '../../data/repositories/book_repository.dart';
 import '../../data/repositories/school_repository.dart';
 import '../../data/sync/sync_service.dart';
+import '../../shared/widgets/book_widgets.dart';
 
 class ClerkDashboardScreen extends ConsumerStatefulWidget {
   const ClerkDashboardScreen({super.key});
@@ -58,6 +60,23 @@ class _ClerkDashboardScreenState extends ConsumerState<ClerkDashboardScreen> {
     } else {
       setState(() => _isLoadingSchools = false);
     }
+  }
+
+  Future<void> _refreshAll() async {
+    final school = ref.read(activeSchoolProvider);
+    final sync = ref.read(syncServiceProvider);
+    await sync.flush();
+    if (school != null) await sync.pullBooksForSchool(school.id);
+  }
+
+  String _failedItemTitle(OutboxData item) {
+    try {
+      final m = jsonDecode(item.payload) as Map<String, dynamic>;
+      final t = (m['title'] ?? '').toString().trim();
+      if (t.isNotEmpty) return t;
+    } catch (_) {}
+    final id = item.entityId;
+    return 'Record #${id.length > 8 ? id.substring(0, 8) : id}…';
   }
 
   Future<void> _exportCsv(List<BookRecord> books) async {
@@ -149,9 +168,9 @@ class _ClerkDashboardScreenState extends ConsumerState<ClerkDashboardScreen> {
                     final item = failedItems[idx];
                     return ListTile(
                       dense: true,
-                      title: Text('Record #${item.entityId.substring(0, 8)}...'),
+                      title: Text(_failedItemTitle(item)),
                       subtitle: Text(
-                        item.lastError ?? 'Unknown error',
+                        '${item.op == "delete" ? "Delete failed: " : ""}${item.lastError ?? "Unknown error"}',
                         style: const TextStyle(color: AppTheme.errorColor, fontSize: 12),
                       ),
                       trailing: Row(
@@ -233,7 +252,9 @@ class _ClerkDashboardScreenState extends ConsumerState<ClerkDashboardScreen> {
           PopupMenuButton<String>(
             icon: const Icon(Icons.account_circle_outlined),
             onSelected: (val) async {
-              if (val == 'logout') {
+              if (val == 'account') {
+                context.push('/account');
+              } else if (val == 'logout') {
                 await supabase.auth.signOut();
                 if (context.mounted) {
                   context.go('/auth');
@@ -246,6 +267,16 @@ class _ClerkDashboardScreenState extends ConsumerState<ClerkDashboardScreen> {
                 child: Text(auth?.user?.email ?? 'User'),
               ),
               const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'account',
+                child: Row(
+                  children: [
+                    Icon(Icons.manage_accounts_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Account Settings'),
+                  ],
+                ),
+              ),
               const PopupMenuItem(
                 value: 'logout',
                 child: Row(
@@ -307,6 +338,10 @@ class _ClerkDashboardScreenState extends ConsumerState<ClerkDashboardScreen> {
               ),
             ),
             const Divider(height: 1),
+            booksAsync.maybeWhen(
+              data: (books) => _buildSummary(books, auth),
+              orElse: () => const SizedBox.shrink(),
+            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
@@ -353,7 +388,7 @@ class _ClerkDashboardScreenState extends ConsumerState<ClerkDashboardScreen> {
                   final filtered = books.where((b) {
                     if (_searchFilter.isEmpty) return true;
                     final title = b.title?.toLowerCase() ?? '';
-                    final author = b.author?.toLowerCase() ?? '';
+                    final author = b.authorsDisplay.toLowerCase();
                     final isbn = b.isbn?.toLowerCase() ?? '';
                     return title.contains(_searchFilter) ||
                         author.contains(_searchFilter) ||
@@ -387,88 +422,15 @@ class _ClerkDashboardScreenState extends ConsumerState<ClerkDashboardScreen> {
                     );
                   }
 
-                  return ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (ctx, idx) {
-                      final item = filtered[idx];
-                      return Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      item.title ?? 'Untitled Book',
-                                      style: const TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppTheme.textPrimary,
-                                      ),
-                                    ),
-                                  ),
-                                  _buildSyncBadge(item.syncState),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${item.author ?? "Unknown Author"}${item.year != null && item.year!.isNotEmpty ? " (${item.year})" : ""}',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 6,
-                                runSpacing: 4,
-                                children: [
-                                  if (item.isbn != null && item.isbn!.isNotEmpty)
-                                    _buildInfoChip(Icons.qr_code, item.isbn!),
-                                  _buildInfoChip(
-                                    Icons.copy_rounded,
-                                    '${item.quantity} ${item.quantity == 1 ? "copy" : "copies"}',
-                                  ),
-                                  _buildInfoChip(
-                                    Icons.auto_awesome,
-                                    item.condition ?? 'Good',
-                                  ),
-                                  if (item.shelfLocation != null &&
-                                      item.shelfLocation!.isNotEmpty)
-                                    _buildInfoChip(
-                                      Icons.shelves,
-                                      item.shelfLocation!,
-                                    ),
-                                  if (item.flaggedAsDuplicate)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color:
-                                            AppTheme.warningColor.withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: const Text(
-                                        'Duplicate',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: AppTheme.warningColor,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                  return RefreshIndicator(
+                    onRefresh: _refreshAll,
+                    child: ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (ctx, idx) => _buildBookCard(filtered[idx]),
+                    ),
                   );
                 },
               ),
@@ -480,6 +442,189 @@ class _ClerkDashboardScreenState extends ConsumerState<ClerkDashboardScreen> {
         icon: const Icon(Icons.qr_code_scanner),
         label: const Text('Start Scanning'),
         onPressed: () => context.go('/scan'),
+      ),
+    );
+  }
+
+  Widget _buildSummary(List<BookRecord> books, AuthStateData? auth) {
+    final myId = auth?.user?.id;
+    final mine = books.where((b) => b.clerkId == myId).toList();
+    final now = DateTime.now();
+    final today = mine.where((b) {
+      final d = b.updatedAt;
+      return d.year == now.year && d.month == now.month && d.day == now.day;
+    }).length;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildStatCard(
+                Icons.menu_book_outlined, 'My scans', '${mine.length}'),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _buildStatCard(Icons.today_outlined, 'Today', '$today'),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _buildStatCard(
+                Icons.school_outlined, 'Schools', '${_schools.length}'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(IconData icon, String label, String value) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 18, color: AppTheme.primaryColor),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 11, color: AppTheme.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBookCard(BookRecord item) {
+    final authors = item.authorsDisplay;
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => showBookDetailSheet(
+          context,
+          item,
+          onEdit: () => showEditBookDialog(context, item),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      item.title ?? 'Untitled Book',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ),
+                  _buildSyncBadge(item.syncState),
+                  PopupMenuButton<String>(
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.more_vert, size: 20),
+                    onSelected: (v) async {
+                      if (v == 'details') {
+                        await showBookDetailSheet(
+                          context,
+                          item,
+                          onEdit: () => showEditBookDialog(context, item),
+                        );
+                      } else if (v == 'edit') {
+                        await showEditBookDialog(context, item);
+                      } else if (v == 'delete') {
+                        await deleteBookWithConfirm(context, ref, item);
+                      }
+                    },
+                    itemBuilder: (ctx) => const [
+                      PopupMenuItem(value: 'details', child: Text('View details')),
+                      PopupMenuItem(value: 'edit', child: Text('Edit')),
+                      PopupMenuItem(value: 'delete', child: Text('Delete')),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Text(
+                  '${authors.isEmpty ? "Unknown Author" : authors}'
+                  '${item.year != null && item.year!.isNotEmpty ? " (${item.year})" : ""}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  if (item.isbn != null && item.isbn!.isNotEmpty)
+                    _buildInfoChip(Icons.qr_code, item.isbn!),
+                  _buildInfoChip(
+                    Icons.copy_rounded,
+                    '${item.quantity} ${item.quantity == 1 ? "copy" : "copies"}',
+                  ),
+                  _buildInfoChip(
+                    Icons.auto_awesome,
+                    item.condition ?? 'Good',
+                  ),
+                  if (item.category != null && item.category!.isNotEmpty)
+                    _buildInfoChip(Icons.label_outline, item.category!),
+                  if (item.shelfLocation != null &&
+                      item.shelfLocation!.isNotEmpty)
+                    _buildInfoChip(Icons.shelves, item.shelfLocation!),
+                  if (item.flaggedAsDuplicate)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppTheme.warningColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'Duplicate',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.warningColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -82,6 +82,14 @@ class AppDatabase extends _$AppDatabase {
         .getSingleOrNull();
   }
 
+  Future<List<MetadataCacheData>> searchCachedMetadataByTitle(
+      String query, int limit) {
+    return (select(metadataCache)
+          ..where((tbl) => tbl.title.like('%$query%'))
+          ..limit(limit))
+        .get();
+  }
+
   Future<void> cacheMetadata(MetadataCacheCompanion meta) {
     return into(metadataCache).insertOnConflictUpdate(meta);
   }

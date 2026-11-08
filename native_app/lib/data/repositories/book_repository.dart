@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import '../../core/validators.dart';
+import '../../shared/utils/author_split.dart';
 import '../local/app_database.dart';
 import '../remote/supabase_client.dart';
 import '../sync/sync_service.dart';
@@ -52,6 +54,10 @@ class BookRecord {
     required this.updatedAt,
   });
 
+  /// All authors joined for display, e.g. "A, B, C".
+  String get authorsDisplay =>
+      AuthorUtils.joinAuthors(author, author2, author3, author4, author5);
+
   factory BookRecord.fromDrift(Book b) {
     return BookRecord(
       id: b.id,
@@ -95,7 +101,9 @@ class BookRepository {
     return list.map(BookRecord.fromDrift).toList();
   }
 
-  Future<void> saveBook({
+  /// Saves (creates or updates) a book locally, queues it for sync and
+  /// returns the record id.
+  Future<String> saveBook({
     String? id,
     String? isbn,
     String? title,
@@ -179,6 +187,43 @@ class BookRepository {
 
     // 4. Trigger background sync without blocking
     _syncService.flush();
+    return bookId;
+  }
+
+  /// Existing records at [schoolId] whose ISBN matches [isbn] (digits only).
+  Future<List<BookRecord>> findByIsbn(String schoolId, String isbn) async {
+    final clean = Validators.cleanIsbn(isbn).toUpperCase();
+    if (clean.isEmpty) return [];
+    final all = await getBooks(schoolId);
+    return all.where((b) {
+      final other = b.isbn;
+      if (other == null || other.isEmpty) return false;
+      return Validators.cleanIsbn(other).toUpperCase() == clean;
+    }).toList();
+  }
+
+  /// Changes only the copy count of an existing record (minimum 1).
+  Future<void> setQuantity(BookRecord b, int quantity) {
+    return saveBook(
+      id: b.id,
+      isbn: b.isbn,
+      title: b.title,
+      author: b.author,
+      author2: b.author2,
+      author3: b.author3,
+      author4: b.author4,
+      author5: b.author5,
+      publisher: b.publisher,
+      year: b.year,
+      quantity: quantity < 1 ? 1 : quantity,
+      condition: b.condition,
+      category: b.category,
+      shelfLocation: b.shelfLocation,
+      notes: b.notes,
+      schoolId: b.schoolId,
+      clerkId: b.clerkId,
+      flaggedAsDuplicate: b.flaggedAsDuplicate,
+    );
   }
 
   Future<void> deleteBook(String bookId) async {

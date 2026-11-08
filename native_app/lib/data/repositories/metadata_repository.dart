@@ -145,6 +145,64 @@ class MetadataRepository {
     return null;
   }
 
+  /// Title typeahead: shared Supabase pool first, local cache when offline.
+  Future<List<MetadataLookupResult>> searchByTitle(
+    String query, {
+    int limit = 6,
+  }) async {
+    final q = query.trim();
+    if (q.length < 2) return [];
+
+    try {
+      final rows = await _booksApi.searchMetadataByTitle(q, limit: limit);
+      final results = rows
+          .where((r) => (r['title']?.toString() ?? '').trim().isNotEmpty)
+          .map((r) {
+        final authors = [
+          r['author'],
+          r['author_2'],
+          r['author_3'],
+          r['author_4'],
+          r['author_5'],
+        ]
+            .map((a) => a?.toString().trim() ?? '')
+            .where((a) => a.isNotEmpty)
+            .toList();
+        return MetadataLookupResult(
+          title: r['title'].toString(),
+          author: authors.join(', '),
+          authors: authors,
+          publisher: r['publisher']?.toString() ?? '',
+          year: r['year']?.toString() ?? '',
+          category: r['category']?.toString(),
+          isbn: r['isbn']?.toString() ?? '',
+          source: 'supabase_pool',
+        );
+      }).toList();
+      if (results.isNotEmpty) return results;
+    } catch (_) {
+      // offline or server error: fall through to the local cache
+    }
+
+    final cached = await _db.searchCachedMetadataByTitle(q, limit);
+    return cached.map((c) {
+      final authors = [c.author, c.author2, c.author3, c.author4, c.author5]
+          .map((a) => a?.trim() ?? '')
+          .where((a) => a.isNotEmpty)
+          .toList();
+      return MetadataLookupResult(
+        title: c.title ?? '',
+        author: authors.join(', '),
+        authors: authors,
+        publisher: c.publisher ?? '',
+        year: c.year ?? '',
+        category: c.category,
+        isbn: c.isbn,
+        source: 'local_cache',
+      );
+    }).where((r) => r.title.isNotEmpty).toList();
+  }
+
   Future<void> _cacheLocally(MetadataLookupResult res) async {
     await _db.cacheMetadata(
       MetadataCacheCompanion(
